@@ -3,6 +3,10 @@
 All notable changes to SoundControl. Versions follow [semantic versioning](https://semver.org);
 1.0.0 will follow wider real-world testing (HTTPS and the first security scan's fixes landed in 0.7.0).
 
+## [0.9.1] - 2026-11-07
+- Help brought up to date: new "Accounts & roles" section, admin-only settings marked, HTTPS address, Bluesound/NAD radio, five new troubleshooting answers, links to the guides
+- docs/HTTPS.md: create your own certificate and trust it on Windows, macOS, Linux, iPhone/iPad, Android and Firefox
+
 ## [0.9.0] - 2026-11-07
 - Settings → 🔌 Devices (admins): add an amp by IP with automatic detection (read-only "who are you?" queries for HEOS, Denon/Marantz, Yamaha, Onkyo/Pioneer and BluOS), or scan a home network (/24) to find amps; remove devices; changes are saved to config/devices.json with a backup and applied without a restart
 - Detection and scans only target home-network (private) addresses; scans run one at a time and are logged

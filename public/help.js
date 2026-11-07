@@ -15,7 +15,9 @@
       ['ul', [
         'Top: the amp itself (a photo of your amp or one of the digital faces), the waves and the clock.',
         'Below: tabs for Controls, Remote, Radio, Clock and Settings. On a wide screen the remote sits on the left and the tabs on the right.',
-        'Every change you make is sent to the amp and read back, so what you see is what the amp is really doing.'
+        'Every change you make is sent to the amp and read back, so what you see is what the amp is really doing.',
+        'The address is https://<server>:8443 when HTTPS is set up (the old http address just redirects there).',
+        'Admins can change everything; regular users control the amp, radio and clock (see "Accounts & roles").'
       ]],
       ['p', 'No network amp? SoundControl then runs a virtual amp: internet radio plays on the device you are using, and everything else (faces, speakers, clock, alarms) works the same.'],
       ['p', 'Supported amps: Denon and Marantz (HEOS and network control; tested on a Marantz PM7000N). Experimental, not yet tested on real hardware: Yamaha MusicCast, Onkyo / Pioneer / Integra, and Bluesound / NAD (BluOS). Admins add them in Settings → 🔌 Devices (Detect by IP, or Scan network).'],
@@ -42,7 +44,7 @@
       ['p', 'Tap the display in a digital face to cycle through ten equaliser looks: Glow bars, Faders, Halo, Terrain, Capsules, Scope, Mirror, LED, Waterfall and Silk. Your choice is remembered.']
     ] },
     { id: 'remote', icon: '📟', title: 'The remote (handset)', body: [
-      ['p', 'A clickable copy of the amp\'s own remote, shown when its photo has been added. Each button does its real job; the little screen above it says what the amp reported.'],
+      ['p', 'A clickable copy of the Marantz RC004PM remote, shown when its photo has been added (photos are not included in the project; see public/img/README.md). Each button does its real job; the little screen above it says what the amp reported.'],
       ['ul', [
         'Confirmed by the amp: power, volume (hold to repeat), mute, Source Direct, input, AUX, Bluetooth, play/pause, skip, stop, sleep (10 to 90 minutes), random, repeat, numbers 1 to 9 (HEOS favourites).',
         '"Sent, check the amp display": arrows, Enter, Back, Setup, Option, Info and Dimmer. The amp does not answer these, so watch its display.',
@@ -71,7 +73,8 @@
       ['ul', [
         'Browse TuneIn: Local Radio, Trending, Music genres, Talk, Sports, News, By Location, By Language, Podcasts.',
         'Search finds stations by name. Below the TuneIn results, "More stations · open radio directory" adds stations TuneIn search cannot reach; they also play on the amp.',
-        'Search understands common abbreviations, such as ASOT (A State of Trance), ABGT (Group Therapy), DnB and EDM, and genre words like "trance".'
+        'Search understands common abbreviations, such as ASOT (A State of Trance), ABGT (Group Therapy), DnB and EDM, and genre words like "trance".',
+        'Open-directory stations also play on Bluesound / NAD players. Before a station is sent to the amp, SoundControl checks its address cannot be switched to one inside your home network; a station that fails the check can still be played in the browser.'
       ]],
       ['p', 'Without an amp (virtual amp): pick a genre or search, and the station plays on this device. The amp\'s power, volume and mute still decide what you hear.'],
       ['ul', [
@@ -104,13 +107,27 @@
     { id: 'settings', icon: '⚙', title: 'Settings', body: [
       ['ul', [
         'Front panel: photo of your amp, Neon glass, Retro VU or Minimal pro.',
-        '🎵 Spotify: setup and connection.',
-        'HEOS account: sign the amp in to HEOS to unlock TuneIn radio and favourites. The password goes straight to the amp and is never stored by this app.',
-        'Appearance: accent colour (match the visualiser, or classic blue) and clock position.',
-        'Rename: tap ✎ next to the device name to change its name and room line; every device sees the new name.',
+        '🎵 Spotify (admins): setup and connection.',
+        'HEOS account (admins): sign the amp in to HEOS to unlock TuneIn radio and favourites. The password goes straight to the amp and is never stored by this app.',
+        'Appearance (everyone, per browser): accent colour (match the visualiser, or classic blue) and clock position.',
+        'Rename (admins): tap ✎ next to the device name to change its name and room line; every device sees the new name.',
         '🔌 Devices (admins): add an amp by typing its IP address and pressing Detect; SoundControl asks it who it is (nothing on the amp changes) and suggests the setup. Or scan your network to find amps you don\'t know the address of. Remove a device with ✕.'
       ]],
       ['warn', 'Scanning the network connects to every address on the amps\' control ports. Security tools (an IPS, firewall or SIEM) may report it as a port scan. Use Detect with a known IP when you can.']
+    ] },
+    { id: 'accounts', icon: '👥', title: 'Accounts & roles', body: [
+      ['p', 'There are two kinds of account:'],
+      ['ul', [
+        'Admin: everything, plus account-level settings: Spotify setup, the HEOS account, renaming devices, and adding, detecting, scanning and removing devices.',
+        'User: everything a household member needs: power, volume (within the safety maximum), inputs, the remote, radio, Spotify playback, alarms, timers and reminders, and their own look (faces, colours, clock position).'
+      ]],
+      ['p', 'Accounts are created on the server, never from the sign-in page:'],
+      ['steps', [
+        'Admin account: npm run user:create',
+        'Regular user: npm run user:create -- NAME --user',
+        'The password is typed twice and never shown (at least 10 characters).'
+      ]],
+      ['tip', 'Accounts made before roles existed are admins. After five wrong passwords, signing in for that name is paused for 15 minutes.']
     ] },
     { id: 'phone', icon: '📱', title: 'Using it on your phone', body: [
       ['ul', [
@@ -138,8 +155,12 @@
         ['Radio asks me to sign in.', 'Sign the amp in to HEOS in Settings. Without it, TuneIn and favourites are unavailable.'],
         ['A station will not start.', 'Some stations are offline or use formats the amp cannot play. Try another; the open-directory list shows the format and bitrate.'],
         ['No sound from browser radio.', 'Check the virtual amp is on and not muted, and the device volume is up. If the browser blocked autoplay, tap ▶.'],
-        ['Every action fails with 403.', 'The page was open while the server restarted, or the action is admin-only ("only an admin can change this"). Reload, or ask an admin.'],
-        ['The browser warns the connection is not private.', 'Trust the SoundControl Local CA on that device (see "Using it on your phone"), or open it once and choose to continue.'],
+        ['Every action fails with 403.', 'The page was open while the server restarted. Reload and sign in again.'],
+        ['"Only an admin can change this".', 'That setting is admin-only (Spotify setup, HEOS account, names, devices). Ask an admin, or sign in with an admin account.'],
+        ['"The amp is not answering".', 'The server cannot reach the amp: check it is on, connected and set to Network Control "Always On", and that nothing blocks the connection. Details are in the server log.'],
+        ['"This station cannot be sent to the amp safely".', 'Its address keeps changing, which could be used to point the amp at your home network. Play it in the browser instead, or pick another station.'],
+        ['Detect finds nothing.', 'Check the IP address, that the amp is on (or Network Control is "Always On") and that the brand is supported. Experimental brands may need their network control switched on in the amp\'s settings.'],
+        ['The browser warns the connection is not private.', 'Trust the SoundControl Local CA on that device (see "Using it on your phone" and docs/HTTPS.md). Firefox keeps its own list: set security.enterprise_roots.enabled to true in about:config, or import the CA there.'],
         ['The waves do not follow my amp\'s music.', 'The music plays on the amp, not in the app. Use 🎤 for the room sound, or browser radio.'],
         ['Spotify says Premium required.', 'Spotify only allows playback control and developer apps for Premium accounts.']
       ]]
@@ -295,6 +316,7 @@
       p.append(link);
       about.append(p,
         el('p', '', 'A self-hosted web remote for network amplifiers, with a virtual amp for people without one.'),
+        el('p', '', 'Guides in the project: README.md (install and features), docs/HTTPS.md (certificates on every device), docs/DRIVERS.md (supported amps and how to configure them), CHANGELOG.md (every release). Found a bug or tried an experimental driver? Open an issue on GitHub.'),
         el('p', 'help-muted', 'Not affiliated with or endorsed by Marantz, Denon, HEOS, TuneIn or Spotify. Product names are used only to say what this works with. Internet radio stations come from the open Radio Browser directory (radio-browser.info).'));
       // Show the version in the top bar too.
       const brand = document.querySelector('.topbar .brand .muted');

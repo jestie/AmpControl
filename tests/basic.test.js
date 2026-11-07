@@ -421,6 +421,15 @@ test('spotify: links, PKCE sign-in, token refresh, tokens never leave the server
   assert.equal((fs.statSync(file).mode & 0o777).toString(8), '600');
 });
 
+test('version: package version and changelog releases are parsed', () => {
+  const { versionInfo, parseChangelog } = require('../src/version');
+  const info = versionInfo();
+  assert.equal(info.version, require('../package.json').version);
+  assert.equal(info.releases[0].version, info.version, 'the changelog has an entry for the current version');
+  assert.ok(info.releases[0].items.length > 0);
+  assert.deepEqual(parseChangelog('## [1.2.0] - 2026-01-02\n- One\n* Two\ntext'), [{ version: '1.2.0', date: '2026-01-02', items: ['One', 'Two'] }]);
+});
+
 test('heos playStream sends the address as HEOS expects (not fully percent-encoded)', async () => {
   const HEOSDriver = require('../src/drivers/heos');
   const driver = new HEOSDriver({ host: '127.0.0.1', pid: '7', streamVerifyAttempts: 1, streamVerifyMs: 1 });

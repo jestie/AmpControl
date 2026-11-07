@@ -894,5 +894,6 @@
     }
   });
 
+  if (window.HelpCentre) window.HelpCentre.create({ api, toast });
   load();
 })();

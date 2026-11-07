@@ -37,6 +37,9 @@ the real music.
   beside the amp; tap one to take its grille off. The cones punch out on the
   beat and the tweeters flick on cymbals, more as the volume goes up.
 - **Name it yourself**: tap ✎ to rename a device and its room line.
+- **Help built in**: the ? Help button (or press ? / F1) opens a searchable
+  guide to every feature, troubleshooting and privacy notes, plus What's new.
+  Release history: [CHANGELOG.md](CHANGELOG.md).
 - **Interactive front panel** (optional, needs photos, see below): turn the
   real volume knob, click through inputs with the input knob, press power and
   Source Direct, and read the live state on the amp's own display.

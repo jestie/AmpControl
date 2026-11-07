@@ -3,6 +3,7 @@ const { clampVolume, validateStreamUrl } = require('../utils/volume');
 const { csrfProtection } = require('../auth/csrf');
 const { isRemoteKey, pressRemoteKey } = require('../remote');
 const { WebRadio } = require('../webradio');
+const { versionInfo } = require('../version');
 
 const PLAY_STATES = new Set(['play', 'pause', 'stop']);
 
@@ -59,6 +60,10 @@ function createApiRouter({ manager, logger, scheduler = null, webradio = new Web
       return badRequest(res, e.message);
     }
   }));
+
+  // Version + release notes (signed-in only; read once per process).
+  const VERSION = versionInfo();
+  router.get('/version', (req, res) => res.json(VERSION));
 
   router.get('/session', (req, res) => {
     res.json({ user: req.session.username });

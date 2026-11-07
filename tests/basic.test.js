@@ -341,6 +341,9 @@ test('browser radio: only directory stations, never private addresses', async ()
   assert.equal(list[0].favicon, '', 'only https logos');
   assert.ok(!('url' in list[0]), 'the stream address is never sent to the browser');
   await assert.rejects(() => radio.search({ tag: 'evil' }), /unknown genre/);
+  assert.deepEqual(WebRadio.plan('asot of trance'), { phrase: 'a state of trance', words: ['trance'] });
+  assert.equal(WebRadio.plan('ASOT').phrase, 'a state of trance');
+  assert.deepEqual(WebRadio.plan('jazz radio fm').words, ['jazz'], 'useful words only, no filler like radio or fm');
   await assert.rejects(() => radio.station('../../etc'), /invalid station/);
 });
 

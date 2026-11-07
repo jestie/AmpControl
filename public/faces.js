@@ -87,7 +87,7 @@
     const title = el('div', { class: 'df-title', text: '' });
     const sub = el('div', { class: 'df-sub', text: '' });
     const spectrum = el('canvas', { class: 'df-spectrum', 'aria-hidden': 'true' });
-    const display = el('div', { class: 'df-display' }, [title, sub, spectrum]);
+    const display = el('div', { class: 'df-display', role: 'button', tabindex: '0', title: 'Tap to change the equaliser look', 'aria-label': 'Equaliser display: tap to change the look' }, [spectrum, title, sub]);
     const left = vuMeter('L');
     const right = vuMeter('R');
     const meters = el('div', { class: 'df-meters', 'aria-hidden': 'true' }, [left.node, right.node]);
@@ -122,7 +122,28 @@
       stops.replaceChildren(...colors.map((c, i) => svg('stop', { offset: `${(i / Math.max(1, colors.length - 1)) * 100}%`, 'stop-color': c })));
     }
     setGradient(['#22d3ee', '#4f7cff', '#b26bff']);
-    window.addEventListener('sc:palette', (e) => { if (e.detail && e.detail.stops) setGradient(e.detail.stops); });
+    let paletteStops = ['#22d3ee', '#4f7cff', '#b26bff'];
+    window.addEventListener('sc:palette', (e) => { if (e.detail && e.detail.stops) { setGradient(e.detail.stops); paletteStops = e.detail.stops; } });
+
+    // ---- equaliser looks in the display: tap to cycle ----
+    const EQ_KEY = 'soundcontrol.eq.look';
+    const modes = window.EqViz ? window.EqViz.MODES : [];
+    const renderer = window.EqViz ? window.EqViz.createRenderer() : null;
+    let modeIndex = 0;
+    try { modeIndex = Math.max(0, modes.findIndex((m) => m.id === localStorage.getItem(EQ_KEY))); } catch (e) { modeIndex = 0; }
+    function nextLook() {
+      if (!modes.length) return;
+      modeIndex = (modeIndex + 1) % modes.length;
+      try { localStorage.setItem(EQ_KEY, modes[modeIndex].id); } catch (e) { /* fine */ }
+      show(`${modeIndex + 1}/${modes.length}  ${modes[modeIndex].name}`);
+    }
+    display.addEventListener('click', nextLook);
+    display.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); nextLook(); } });
+    function lookColors() {
+      if (root.classList.contains('skin-retro')) return ['#ffb547'];
+      if (root.classList.contains('skin-minimal')) return [getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#3d8bfd'];
+      return paletteStops;
+    }
 
     // ---- state ----
     let data = null;
@@ -273,20 +294,8 @@
       if (spectrum.width !== Math.round(w * dpr)) { spectrum.width = Math.round(w * dpr); spectrum.height = Math.round(h * dpr); }
       sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       sctx.clearRect(0, 0, w, h);
-      if (!on) return;
-      const bars = 32;
-      const color = getComputedStyle(root).getPropertyValue('--df-bar').trim() || '#7dd3fc';
-      sctx.fillStyle = color;
-      const t = performance.now() / 1000;
-      for (let i = 0; i < bars; i += 1) {
-        let v;
-        if (lv.spectrum && lv.spectrum.length) v = lv.spectrum[Math.floor((i / bars) * lv.spectrum.length)] || 0;
-        else v = lv.energy * (0.35 + 0.65 * Math.abs(Math.sin(t * (1.3 + i * 0.07) + i * 0.9)));
-        const bh = Math.max(1, v * h);
-        sctx.globalAlpha = 0.35 + 0.65 * v;
-        sctx.fillRect(i * (w / bars) + 1, h - bh, w / bars - 2, bh);
-      }
-      sctx.globalAlpha = 1;
+      if (!on || !renderer) return;
+      renderer.draw(modes[modeIndex].id, sctx, w, h, lv, lookColors(), performance.now() / 1000);
     }
     requestAnimationFrame(frame);
 

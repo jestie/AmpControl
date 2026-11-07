@@ -22,6 +22,27 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const GENRES = ['pop', 'rock', 'jazz', 'classical', 'dance', 'chillout', 'lounge', 'ambient', 'electronic', 'hip hop', 'soul', 'blues', 'country', 'reggae', 'metal', 'news', '80s', '90s'];
 const MAX_STREAMS = 4;
 
+// Names people type that stations do not use. Lower case.
+const ALIASES = {
+  asot: 'a state of trance',
+  'asot of trance': 'a state of trance',
+  'state of trance': 'a state of trance',
+  abgt: 'group therapy',
+  'above and beyond': 'above & beyond',
+  'above & beyond group therapy': 'group therapy',
+  avb: 'armin van buuren',
+  'armin van buuren': 'armin',
+  tiesto: 'tiësto',
+  'bbc r1': 'bbc radio 1',
+  'bbc r2': 'bbc radio 2',
+  r1: 'radio 1',
+  r2: 'radio 2',
+  dnb: 'drum and bass',
+  'd&b': 'drum and bass',
+  edm: 'dance'
+};
+const STOP_WORDS = new Set(['the', 'and', 'radio', 'fm', 'of', 'music', 'live', 'stream', 'station', 'online']);
+
 function isPrivateAddress(address) {
   if (net.isIPv4(address)) {
     const [a, b] = address.split('.').map(Number);
@@ -107,19 +128,62 @@ class WebRadio {
     return station;
   }
 
-  async search({ q = '', tag = '', country = '' } = {}) {
-    const params = new URLSearchParams({ limit: '40', hidebroken: 'true', order: 'clickcount', reverse: 'true' });
-    const name = String(q).replace(/[\r\n]/g, ' ').trim().slice(0, 60);
-    const genre = String(tag).trim().toLowerCase();
-    if (name) params.set('name', name);
-    if (genre) {
-      if (!GENRES.includes(genre)) throw new Error('unknown genre');
-      params.set('tag', genre);
-      params.set('tagExact', 'true');
-    }
-    if (/^[A-Z]{2}$/.test(country)) params.set('countrycode', country);
+  async _query(fields, limit = 40) {
+    const params = new URLSearchParams({ limit: String(limit), hidebroken: 'true', order: 'clickcount', reverse: 'true', ...fields });
     const list = await this.fetchJson(`/json/stations/search?${params}`);
     return (Array.isArray(list) ? list : []).map((s) => this._remember(s)).filter(Boolean);
+  }
+
+  /** What a typed search should look for: the alias, the phrase, and its useful words. */
+  static plan(q) {
+    const typed = String(q || '').replace(/[\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+    const lower = typed.toLowerCase();
+    const phrase = ALIASES[lower] || typed;
+    const words = [...new Set(lower.split(/[^a-z0-9&]+/).filter((w) => w.length >= 3 && !STOP_WORDS.has(w)))]
+      .map((w) => ALIASES[w] || w)
+      .filter((w) => w !== phrase.toLowerCase())
+      .slice(0, 3);
+    return { phrase, words };
+  }
+
+  async search({ q = '', tag = '', country = '' } = {}) {
+    const genre = String(tag).trim().toLowerCase();
+    if (genre) {
+      if (!GENRES.includes(genre)) throw new Error('unknown genre');
+      return this._query({ tag: genre, tagExact: 'true' });
+    }
+    const { phrase, words } = WebRadio.plan(q);
+    if (!phrase) return this._query({});
+    const extra = /^[A-Z]{2}$/.test(country) ? { countrycode: country } : {};
+    // Name matches for the phrase first, then names and genre tags for each word.
+    const lookups = [this._query({ name: phrase, ...extra })];
+    for (const word of words) {
+      lookups.push(this._query({ name: word, ...extra }, 15));
+      if (/^[a-z0-9 &-]{3,30}$/.test(word)) lookups.push(this._query({ tag: word, ...extra }, 15));
+    }
+    const results = await Promise.allSettled(lookups);
+    const seen = new Set();
+    const merged = [];
+    for (const r of results) {
+      if (r.status !== 'fulfilled') continue;
+      for (const station of r.value) {
+        if (seen.has(station.uuid)) continue;
+        seen.add(station.uuid);
+        merged.push(station);
+      }
+    }
+    if (!merged.length && results.every((r) => r.status === 'rejected')) throw results[0].reason;
+    return merged.slice(0, 60);
+  }
+
+  /** A station's stream address for the amp to play, checked like our own streams. */
+  async publicStreamUrl(uuid) {
+    const station = await this.station(uuid);
+    const target = new URL(station.url);
+    const host = target.hostname.replace(/^\[|\]$/g, '');
+    const addresses = net.isIP(host) ? [{ address: host }] : await dns.promises.lookup(host, { all: true });
+    if (!addresses.length || addresses.some((a) => isPrivateAddress(a.address))) throw new Error('blocked: private network address');
+    return { url: station.url, name: station.name };
   }
 
   async station(uuid) {

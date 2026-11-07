@@ -197,6 +197,23 @@ function createApiRouter({ manager, logger, scheduler = null, webradio = new Web
     }
   }));
 
+  // Play an open-directory station on a real amp (HEOS). The browser sends the
+  // station's id; the server looks up the address itself.
+  router.post('/devices/:id/webradio/play-on-amp', wrap(async (req, res) => {
+    const driver = device(req, res);
+    if (!driver) return;
+    if (typeof driver.playStream !== 'function' || !(driver.capabilities() || {}).playStream) return badRequest(res, 'this device cannot play stream addresses');
+    let stream;
+    try { stream = await webradio.publicStreamUrl((req.body || {}).uuid); } catch (e) { return badRequest(res, e.message); }
+    try {
+      await driver.playStream(stream.url);
+    } catch (e) {
+      return res.status(502).json({ error: e.message });
+    }
+    logger.info({ action: 'webradio_on_amp', device: req.params.id, station: stream.name, user: req.session.username });
+    return res.json({ ok: true, name: stream.name });
+  }));
+
   // The page tells a virtual amp what it is playing (for its display and the clock).
   router.post('/devices/:id/webradio/playing', wrap(async (req, res) => {
     const driver = device(req, res);

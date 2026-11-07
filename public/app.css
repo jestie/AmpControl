@@ -747,3 +747,18 @@ input.switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 .skin-retro .df-dial-cap { right: 9.3cqw; width: 12.5cqw; bottom: 1.6cqw; }
 .skin-retro .df-display { left: 30cqw; right: 30cqw; }
 .skin-retro .df-mute { right: 25cqw; }
+
+/* ---- Equaliser looks fill the display; text sits on top ---- */
+.df-display { cursor: pointer; justify-content: flex-start; padding-top: 1.2cqw; }
+.df-display:focus-visible { outline: 0.3cqw solid var(--accent); outline-offset: 0.2cqw; }
+.df-spectrum { inset: 0; height: 100%; opacity: 0.9; }
+.skin-neon .df-spectrum { opacity: 0.95; }
+.skin-minimal .df-spectrum { height: 100%; opacity: 0.85; }
+.df-title, .df-sub { text-shadow: 0 0 0.8cqw rgba(0, 0, 0, 0.9), 0 0 0.3cqw rgba(0, 0, 0, 0.9); }
+.df-title { font-size: 2cqw; }
+.df-sub { font-size: 1.05cqw; margin-top: 0.3cqw; }
+.skin-retro .df-display { height: 14cqw; top: 8.5cqw; }
+.skin-retro .df-spectrum { display: block; opacity: 0.85; }
+.skin-minimal .df-display { background: #0b0c0e; border-radius: 1cqw; padding: 1cqw 1.4cqw 0; box-shadow: inset 0 0 0 1px #24272c; height: 17cqw; top: 8cqw; }
+.skin-minimal .df-title { font-size: 2.4cqw; }
+.radio-subhead { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0.6rem 0 0.1rem; }

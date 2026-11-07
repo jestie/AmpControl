@@ -135,15 +135,18 @@
 
     // Levels for the faces' meters: real when analysing, otherwise from the amp's state.
     function levels() {
-      if (live) return { live: true, energy, bands: bandLevel.slice(), spectrum };
+      if (live) return { live: true, energy, bands: bandLevel.slice(), spectrum, wave: live.wave || null };
       const t = performance.now() / 1000;
       const wobble = (k) => Math.max(0, Math.min(1, energy * (0.75 + 0.25 * Math.sin(t * (2.1 + k) + k * 1.7))));
-      return { live: false, energy, bands: [wobble(0), wobble(1), wobble(2), wobble(3)], spectrum: null };
+      return { live: false, energy, bands: [wobble(0), wobble(1), wobble(2), wobble(3)], spectrum: null, wave: null };
     }
 
     function readLive() {
       const { analyser, bins, ctx: actx } = live;
       analyser.getByteFrequencyData(bins);
+      // The waveform too (for the oscilloscope look in the faces).
+      if (!live.wave || live.wave.length !== analyser.fftSize) live.wave = new Float32Array(analyser.fftSize);
+      analyser.getFloatTimeDomainData(live.wave);   // -1..1, full resolution
       const hzPerBin = actx.sampleRate / analyser.fftSize;
       for (let i = 0; i < LAYERS; i += 1) {
         const [lo, hi] = BANDS[i];

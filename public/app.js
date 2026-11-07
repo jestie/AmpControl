@@ -229,10 +229,47 @@
           page = await api(`/api/devices/${card.id}/radio/browse?${params}`);
         }
         renderRadio(page, append);
+        if (top.search && !append) appendDirectory(top.search);
       } catch (e) {
         refs.radioList.replaceChildren(el('li', { class: 'muted small', text: e.message }));
       } finally {
         radio.busy = false;
+      }
+    }
+
+    // Searches also look in the open radio directory, which has stations TuneIn
+    // search cannot reach (e.g. "A State of Trance"). They play on the amp.
+    async function appendDirectory(q) {
+      const heading = el('li', { class: 'radio-subhead', text: 'More stations · open radio directory' });
+      const loading = el('li', { class: 'muted small', text: 'Searching the open directory…' });
+      refs.radioList.append(heading, loading);
+      let stations = [];
+      try { stations = await api(`/api/webradio/search?q=${encodeURIComponent(q)}`); } catch (e) { loading.textContent = e.message; return; }
+      loading.remove();
+      if (!stations.length) { refs.radioList.append(el('li', { class: 'muted small', text: 'Nothing there either.' })); return; }
+      for (const station of stations) {
+        const icon = station.favicon
+          ? el('img', { src: station.favicon, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' })
+          : el('span', { class: 'radio-icon', text: '📻' });
+        if (icon.tagName === 'IMG') icon.addEventListener('error', () => icon.replaceWith(el('span', { class: 'radio-icon', text: '📻' })));
+        const meta = [station.country, station.codec, station.bitrate ? `${station.bitrate}k` : ''].filter(Boolean).join(' · ');
+        const row = el('button', { type: 'button', class: 'radio-item station' }, [
+          icon,
+          el('span', { class: 'radio-name' }, [station.name, el('span', { class: 'wr-meta', text: meta })]),
+          el('span', { class: 'radio-go', text: '▶' })
+        ]);
+        row.addEventListener('click', async () => {
+          setNote(card, `Tuning the amp to ${station.name}…`);
+          try {
+            await api(`/api/devices/${card.id}/webradio/play-on-amp`, { method: 'POST', body: JSON.stringify({ uuid: station.uuid }) });
+            toast(`Playing ${station.name} on the amp`);
+            setNote(card, '');
+          } catch (e) {
+            setNote(card, e.message, true);
+          }
+          setTimeout(() => refresh(card.id), 1500);
+        });
+        refs.radioList.append(el('li', {}, [row]));
       }
     }
 

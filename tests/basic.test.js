@@ -667,6 +667,39 @@ test('add / remove device: validated, backed up, reloaded', async () => {
   }
 });
 
+test('heos favourites: named presets, add by station, remove, now-playing flag', async () => {
+  const HEOSDriver = require('../src/drivers/heos');
+  const driver = new HEOSDriver({ host: '127.0.0.1', pid: '7', presets: [{ id: 1, label: 'Preset 1' }] });
+  const favs = [];
+  const sent = [];
+  let options = [];
+  driver._request = async (cmd) => {
+    sent.push(cmd);
+    const q = new URLSearchParams(cmd.split('?')[1] || '');
+    if (cmd.startsWith('heos://browse/browse?sid=1028')) return { heos: { result: 'success', message: `sid=1028&returned=${favs.length}&count=${favs.length}` }, payload: favs.map((f) => ({ ...f, type: 'station', playable: 'yes' })) };
+    if (cmd.startsWith('heos://browse/set_service_option') && q.get('option') === '19') { favs.push({ name: q.get('name'), mid: q.get('mid'), image_url: 'http://cdn-profiles.tunein.com/x/logoq.png' }); return { heos: { result: 'success', message: '' } }; }
+    if (cmd.startsWith('heos://browse/set_service_option') && q.get('option') === '20') { favs.splice(favs.findIndex((f) => f.mid === q.get('mid')), 1); return { heos: { result: 'success', message: '' } }; }
+    if (cmd.startsWith('heos://player/get_now_playing_media')) return { heos: { result: 'success', message: '' }, payload: { type: 'station', mid: 's1', sid: 3 }, options };
+    return { heos: { result: 'success', message: '' } };
+  };
+  assert.deepEqual(driver.getPresets().map((p) => p.label), ['Preset 1'], 'placeholders until favourites are known');
+  await driver.refreshFavourites({ force: true });
+  assert.deepEqual(driver.getPresets(), [], 'empty favourites = no preset buttons');
+  await driver.addFavourite({ mid: 's92147', name: 'Trance & More' });
+  assert.ok(sent.some((c) => c === 'heos://browse/set_service_option?sid=3&option=19&mid=s92147&name=Trance %26 More'), 'same command as verified on the amp');
+  const presets = driver.getPresets();
+  assert.deepEqual([presets[0].id, presets[0].label, presets[0].mid], [1, 'Trance & More', 's92147']);
+  assert.match(presets[0].image, /^https:\/\/cdn-profiles\.tunein\.com\//, 'logo upgraded to https');
+  await assert.rejects(() => driver.addFavourite({ mid: 's92147', name: 'again' }), /already a favourite/);
+  await assert.rejects(() => driver.addFavourite({ mid: 's1&option=20', name: 'x' }), /invalid station/);
+  await driver.removeFavourite('s92147');
+  assert.ok(sent.includes('heos://browse/set_service_option?option=20&mid=s92147'));
+  assert.equal(driver.getPresets().length, 0);
+  assert.equal((await driver.getNowPlaying()).canFavourite, false, 'no option 19 offered: no star');
+  options = [{ play: [{ id: 19, name: 'Add to HEOS Favorites' }] }];
+  assert.equal((await driver.getNowPlaying()).canFavourite, true);
+});
+
 test('heos playStream sends the address as HEOS expects (not fully percent-encoded)', async () => {
   const HEOSDriver = require('../src/drivers/heos');
   const driver = new HEOSDriver({ host: '127.0.0.1', pid: '7', streamVerifyAttempts: 1, streamVerifyMs: 1 });

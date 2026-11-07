@@ -964,3 +964,25 @@ kbd { font-family: "DejaVu Sans Mono", Consolas, monospace; font-size: 0.8rem; p
 .dev-progress { height: 8px; border-radius: 999px; background: var(--card-soft); overflow: hidden; margin: 0.5rem 0 0.2rem; }
 .dev-progress span { display: block; height: 100%; width: 0; background: var(--ghost-gradient); transition: width 0.4s; }
 p.help-warn.small { font-size: 0.78rem !important; padding: 0.45rem 0.6rem; border-radius: 8px; background: rgba(224, 160, 60, 0.1); border: 1px solid rgba(224, 160, 60, 0.35); color: #f0cf95; }
+
+/* ---- Named presets (HEOS Favourites) and ☆ save buttons ---- */
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.link-btn { background: none; border: 0; min-height: 0; padding: 0.2rem 0.3rem; color: var(--accent); font-size: 0.82rem; }
+.presets-section .presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 0.45rem; }
+.preset-wrap { position: relative; min-width: 0; }
+.preset { width: 100%; display: flex; align-items: center; gap: 0.55rem; text-align: left; padding: 0.4rem 0.55rem; min-height: 48px; }
+.preset img, .preset-num { width: 32px; height: 32px; border-radius: 7px; object-fit: cover; flex: none;
+  display: grid; place-items: center; font-weight: 700; font-size: 0.85rem; background: var(--card); border: 1px solid var(--border); }
+.preset-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.86rem; }
+.preset-remove { display: none; position: absolute; top: -7px; right: -7px; width: 24px; height: 24px; min-height: 0; padding: 0;
+  border-radius: 50%; font-size: 0.7rem; background: var(--danger); border-color: var(--danger); color: #fff; }
+.presets-section.editing .preset-remove { display: grid; place-items: center; }
+.presets-section.editing .preset { opacity: 0.75; }
+.preset-hint { margin: 0.45rem 0 0; }
+.fav-star { flex: none; width: 36px; min-height: 36px; padding: 0; font-size: 1.15rem; line-height: 1; color: var(--warn);
+  background: transparent; border: 1px solid transparent; border-radius: 10px; }
+.fav-star:hover { border-color: var(--border); background: var(--card-soft); }
+.fav-star.saved { color: #ffcf4a; text-shadow: 0 0 8px rgba(255, 200, 60, 0.6); }
+.radio-row { display: flex; align-items: center; gap: 0.3rem; min-width: 0; }
+.radio-row .radio-item { flex: 1; }
+.now-playing .now-star { margin-left: auto; align-self: center; }

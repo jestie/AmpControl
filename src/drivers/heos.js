@@ -302,7 +302,12 @@ class HEOSDriver extends BaseDriver {
   async getNowPlaying() {
     const pid = await this._ensurePid();
     const response = await this._command(`heos://player/get_now_playing_media?pid=${pid}`);
-    return response.payload || null;
+    if (!response.payload) return null;
+    // HEOS lists what can be done with the current item; option 19 = "Add to HEOS
+    // Favorites". Bluetooth, AUX and plain stream addresses do not offer it.
+    const options = Array.isArray(response.options) ? response.options : [];
+    const canFavourite = options.some((group) => Object.values(group).some((list) => Array.isArray(list) && list.some((o) => Number(o.id) === 19)));
+    return { ...response.payload, canFavourite };
   }
 
   async playStream(url) {
@@ -367,11 +372,51 @@ class HEOSDriver extends BaseDriver {
     const before = await this.favouriteCount();
     await this._command(`heos://browse/set_service_option?option=19&pid=${pid}`, { waitFinal: true, timeout: 15000, label: 'add favourite' });
     const after = await this.favouriteCount();
-    if (after <= before) throw new Error('HEOS did not add it to Favourites');
+    this.favouritesAt = 0;
+    if (after <= before) throw new Error('HEOS did not add it to Favourites (only streamed stations can be favourites)');
+    return after;
+  }
+
+  // ---- HEOS Favourites = the presets (Preset N plays favourite N) ----
+  // Verified on a PM7000N 2026-11-07: option 19 with sid/mid/name adds a TuneIn
+  // station without playing it; option 20 with mid removes it.
+
+  async refreshFavourites({ force = false } = {}) {
+    if (!force && this.favourites && Date.now() - (this.favouritesAt || 0) < 20000) return this.favourites;
+    const response = await this._command('heos://browse/browse?sid=1028', { waitFinal: true, timeout: 15000, label: 'favourites' });
+    const items = Array.isArray(response.payload) ? response.payload : [];
+    this.favourites = items.map((item, i) => ({
+      id: i + 1,
+      label: HEOSDriver._decodeName(item.name) || `Favourite ${i + 1}`,
+      mid: HEOSDriver.isSafeMid(String(item.mid || '')) ? String(item.mid) : null,
+      image: HEOSDriver._safeImage(item.image_url)
+    }));
+    this.favouritesAt = Date.now();
+    return this.favourites;
+  }
+
+  async addFavourite({ mid, name }) {
+    if (!HEOSDriver.isSafeMid(String(mid || ''))) throw new Error('invalid station');
+    const label = HEOSDriver._encodeValue(String(name || 'Radio').replace(/[\r\n]/g, ' ').slice(0, 120));
+    const before = (await this.refreshFavourites({ force: true })).length;
+    if (this.favourites.some((f) => f.mid === mid)) throw new Error('that station is already a favourite');
+    await this._command(`heos://browse/set_service_option?sid=${HEOSDriver.RADIO_SID}&option=19&mid=${mid}&name=${label}`, { waitFinal: true, timeout: 15000, label: 'add favourite' });
+    const after = await this.refreshFavourites({ force: true });
+    if (after.length <= before) throw new Error('HEOS did not add it to Favourites');
+    return after;
+  }
+
+  async removeFavourite(mid) {
+    if (!HEOSDriver.isSafeMid(String(mid || ''))) throw new Error('invalid favourite');
+    await this._command(`heos://browse/set_service_option?option=20&mid=${mid}`, { waitFinal: true, timeout: 15000, label: 'remove favourite' });
+    const after = await this.refreshFavourites({ force: true });
+    if (after.some((f) => f.mid === mid)) throw new Error('HEOS did not remove it');
     return after;
   }
 
   getPresets() {
+    // Real favourite names once known; the configured placeholders until then.
+    if (Array.isArray(this.favourites)) return this.favourites.map((f) => ({ id: f.id, label: f.label, image: f.image, mid: f.mid }));
     return this.presets.map((preset) => ({ id: preset.id, label: preset.label }));
   }
 
@@ -407,7 +452,8 @@ class HEOSDriver extends BaseDriver {
       transport: true,
       nowPlaying: true,
       account: true,
-      radio: true
+      radio: true,
+      favourites: true
     };
   }
 }

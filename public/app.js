@@ -106,10 +106,16 @@
     ]);
 
     refs.presets = el('div', { class: 'presets' });
-    refs.presetSection = el('section', { class: 'section', hidden: 'hidden' }, [
-      el('div', { class: 'section-label', text: 'Presets' }),
-      refs.presets
+    refs.presetEdit = el('button', { type: 'button', class: 'link-btn', text: 'Edit' });
+    refs.presetSection = el('section', { class: 'section presets-section', hidden: 'hidden' }, [
+      el('div', { class: 'section-head' }, [el('div', { class: 'section-label', text: 'Presets · HEOS Favourites' }), refs.presetEdit]),
+      refs.presets,
+      el('p', { class: 'muted small preset-hint', text: 'Save more with ☆ next to a station or next to what is playing.' })
     ]);
+    refs.presetEdit.addEventListener('click', () => {
+      const on = refs.presetSection.classList.toggle('editing');
+      refs.presetEdit.textContent = on ? 'Done' : 'Edit';
+    });
 
     refs.streamInput = el('input', { type: 'url', placeholder: 'Direct audio stream, e.g. https://…/radio.mp3', 'aria-label': 'Stream URL' });
     refs.streamButton = el('button', { type: 'submit', text: 'Play' });
@@ -130,7 +136,8 @@
       ]),
       el('div', { class: 'now-playing' }, [
         refs.artPlaceholder,
-        el('div', { class: 'track' }, [refs.title, refs.sub])
+        el('div', { class: 'track' }, [refs.title, refs.sub]),
+        (refs.nowStar = el('button', { type: 'button', class: 'fav-star now-star', title: 'Save what is playing as a preset', 'aria-label': 'Save what is playing as a preset', text: '☆', hidden: 'hidden' }))
       ]),
       refs.transport,
       refs.volume,
@@ -141,6 +148,7 @@
     ]);
 
     card.refs = refs;
+    refs.nowStar.addEventListener('click', () => saveFavourite(card, { nowPlaying: true }, refs.nowStar));
 
     if (device.faceplate && window.Faceplate) {
       card.faceplate = window.Faceplate.create({
@@ -200,7 +208,10 @@
         else if (item.playable && item.mid) playStation(item, radio.stack.length ? radio.stack[radio.stack.length - 1].cid : null);
       });
       if (icon.tagName === 'IMG') icon.addEventListener('error', () => icon.replaceWith(el('span', { class: 'radio-icon', text: '📻' })));
-      return el('li', {}, [row]);
+      if (item.kind !== 'station' || !item.mid) return el('li', {}, [row]);
+      const star = el('button', { type: 'button', class: 'fav-star', title: 'Save as a preset (HEOS Favourite)', 'aria-label': `Save ${item.name} as a preset`, text: '☆' });
+      star.addEventListener('click', () => saveFavourite(card, { mid: item.mid, name: item.name }, star));
+      return el('li', { class: 'radio-row' }, [row, star]);
     }
 
     function renderRadio(page, append) {
@@ -761,29 +772,62 @@
     }
   }
 
+  // ★ Save a station (or what is playing) as a preset = HEOS Favourite.
+  async function saveFavourite(card, body, button) {
+    if (button) button.disabled = true;
+    try {
+      const result = await api(`/api/devices/${card.id}/favourites`, { method: 'POST', body: JSON.stringify(body) });
+      const n = Array.isArray(result.presets) ? result.presets.length : '';
+      toast(`Saved as preset ${n}`);
+      if (button) { button.textContent = '★'; button.classList.add('saved'); }
+      refresh(card.id, { quiet: true });
+    } catch (e) {
+      toast(e.message);
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
   function applyPresets(card, presets) {
     const list = Array.isArray(presets) ? presets : [];
-    const key = list.map((entry) => `${entry.id}:${entry.label}`).join('|');
+    const key = list.map((entry) => `${entry.id}:${entry.label}:${entry.mid || ''}:${entry.image || ''}`).join('|');
     if (key !== card.presetsKey) {
       card.presetsKey = key;
-      card.refs.presets.replaceChildren(...list.map((entry) => el('button', {
-        type: 'button',
-        text: entry.label,
-        onclick: async () => {
+      card.refs.presets.replaceChildren(...list.map((entry) => {
+        const logo = entry.image
+          ? el('img', { src: entry.image, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' })
+          : el('span', { class: 'preset-num', text: String(entry.id) });
+        if (logo.tagName === 'IMG') logo.addEventListener('error', () => logo.replaceWith(el('span', { class: 'preset-num', text: String(entry.id) })));
+        const play = el('button', { type: 'button', class: 'preset', title: `Preset ${entry.id}: ${entry.label}` }, [logo, el('span', { class: 'preset-label', text: entry.label })]);
+        play.addEventListener('click', async () => {
           try {
-            await api(`/api/devices/${card.id}/preset`, {
-              method: 'POST',
-              body: JSON.stringify({ preset: entry.id })
-            });
+            await api(`/api/devices/${card.id}/preset`, { method: 'POST', body: JSON.stringify({ preset: entry.id }) });
             setNote(card, '');
             setTimeout(() => refresh(card.id), 800);
           } catch (e) {
             setNote(card, e.message, true);
           }
+        });
+        const remove = entry.mid ? el('button', { type: 'button', class: 'preset-remove', 'aria-label': `Remove ${entry.label} from presets`, title: 'Remove from presets', text: '✕' }) : null;
+        if (remove) {
+          remove.addEventListener('click', async () => {
+            if (!window.confirm(`Remove "${entry.label}" from your presets (HEOS Favourites)?`)) return;
+            try {
+              await api(`/api/devices/${card.id}/favourites/${encodeURIComponent(entry.mid)}`, { method: 'DELETE' });
+              toast('Removed from presets');
+              refresh(card.id, { quiet: true });
+            } catch (e) { toast(e.message); }
+          });
         }
-      })));
+        return el('div', { class: 'preset-wrap' }, [play, remove]);
+      }));
     }
-    card.refs.presetSection.hidden = list.length === 0;
+    const canSave = Boolean(card.data && card.data.capabilities && card.data.capabilities.favourites);
+    card.refs.presetSection.hidden = list.length === 0 && !canSave;
+    card.refs.presetEdit.hidden = !list.some((p) => p.mid);
+    card.refs.presetSection.querySelector('.preset-hint').textContent = list.length
+      ? 'Save more with ☆ next to a station or next to what is playing.'
+      : 'No presets yet: tap ☆ next to a TuneIn station, or next to what is playing, to save it here.';
   }
 
   function applyStatus(card, data) {
@@ -792,6 +836,13 @@
 
     applyPower(card, data);
     applyNowPlaying(card, data.nowPlaying);
+    if (card.refs.nowStar) {
+      const np = data.nowPlaying || {};
+      card.refs.nowStar.hidden = !(caps.favourites && np.canFavourite);
+      const already = (data.presets || []).some((p) => p.mid && np.mid && p.mid === np.mid);
+      card.refs.nowStar.textContent = already ? '★' : '☆';
+      card.refs.nowStar.classList.toggle('saved', already);
+    }
     if (card.faceplate) card.faceplate.update(data);
     if (card.faces) card.faces.update(data);
     if (card.webradio) card.webradio.update(data);

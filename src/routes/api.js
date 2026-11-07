@@ -436,6 +436,36 @@ function createApiRouter({ manager, logger, scheduler = null, webradio = new Web
     res.json({ ok: true });
   }));
 
+  // HEOS Favourites (= Presets 1..N). Everyday use, so any signed-in user may
+  // add or remove, like in the HEOS app.
+  router.post('/devices/:id/favourites', wrap(async (req, res) => {
+    const driver = device(req, res);
+    if (!driver) return;
+    if (typeof driver.addFavourite !== 'function' || !(driver.capabilities() || {}).favourites) return badRequest(res, 'this device has no favourites');
+    const { mid, name, nowPlaying } = req.body || {};
+    try {
+      if (nowPlaying === true) await driver.addNowPlayingToFavourites();
+      else await driver.addFavourite({ mid, name });
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+    logger.info({ action: 'favourite_add', device: req.params.id, mid: nowPlaying ? 'now-playing' : String(mid).slice(0, 40), user: req.session.username });
+    return res.json({ ok: true, presets: driver.getPresets() });
+  }));
+
+  router.delete('/devices/:id/favourites/:mid', wrap(async (req, res) => {
+    const driver = device(req, res);
+    if (!driver) return;
+    if (typeof driver.removeFavourite !== 'function' || !(driver.capabilities() || {}).favourites) return badRequest(res, 'this device has no favourites');
+    try {
+      await driver.removeFavourite(req.params.mid);
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+    logger.info({ action: 'favourite_remove', device: req.params.id, mid: String(req.params.mid).slice(0, 40), user: req.session.username });
+    return res.json({ ok: true, presets: driver.getPresets() });
+  }));
+
   router.post('/devices/:id/sourcedirect', wrap(async (req, res) => {
     const driver = device(req, res);
     if (!driver) return;

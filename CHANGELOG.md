@@ -3,6 +3,12 @@
 All notable changes to SoundControl. Versions follow [semantic versioning](https://semver.org);
 1.0.0 will follow wider real-world testing (HTTPS and the first security scan's fixes landed in 0.7.0).
 
+## [0.10.0] - 2026-11-07
+- Named presets: the preset buttons show your HEOS Favourites by name (and logo), read live from the amp; empty slots are gone
+- ☆ Save as preset next to every TuneIn station (saved without interrupting playback) and next to what is playing (only when HEOS allows it)
+- Presets → Edit → ✕ removes a favourite; every change is read back from the amp
+- Verified on a Marantz PM7000N: add by station, remove, playback untouched
+
 ## [0.9.1] - 2026-11-07
 - Help brought up to date: new "Accounts & roles" section, admin-only settings marked, HTTPS address, Bluesound/NAD radio, five new troubleshooting answers, links to the guides
 - docs/HTTPS.md: create your own certificate and trust it on Windows, macOS, Linux, iPhone/iPad, Android and Firefox

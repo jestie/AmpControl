@@ -101,6 +101,7 @@ class CompositeDriver extends BaseDriver {
       sourceDirect: false,
       account: false,
       radio: false,
+      favourites: false,
       webRadio: false,
       presets: false,
       playStream: false,
@@ -154,13 +155,15 @@ class CompositeDriver extends BaseDriver {
       for (const preset of presets) {
         if (!preset || preset.id === undefined || seen.has(String(preset.id))) continue;
         seen.add(String(preset.id));
-        merged.push({ id: preset.id, label: preset.label || `Preset ${preset.id}` });
+        merged.push({ id: preset.id, label: preset.label || `Preset ${preset.id}`, image: preset.image || null, mid: preset.mid || null });
       }
     }
     return merged;
   }
 
   async getStatus() {
+    // Keep preset names in step with the amp's favourites (cached ~20 s by the driver).
+    await Promise.allSettled(this.entries.filter((e) => typeof e.driver.refreshFavourites === 'function').map((e) => e.driver.refreshFavourites()));
     const [power, volume, mute, input, playState, nowPlaying, sourceDirect] = await Promise.all([
       this._read('power', 'getPowerState'),
       this._read('volume', 'getVolume'),
@@ -234,6 +237,10 @@ class CompositeDriver extends BaseDriver {
     const entry = this.entries.find((item) => item.type === type);
     return entry ? entry.driver : null;
   }
+
+  async addFavourite(station) { return this._call('favourites', 'addFavourite', station); }
+  async addNowPlayingToFavourites() { return this._call('favourites', 'addNowPlayingToFavourites'); }
+  async removeFavourite(mid) { return this._call('favourites', 'removeFavourite', mid); }
 
   async getAccount() { return this._read('account', 'getAccount'); }
   async signIn(username, password) { return this._call('account', 'signIn', username, password); }

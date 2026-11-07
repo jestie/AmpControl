@@ -78,7 +78,9 @@
       ]],
       ['p', 'Without an amp (virtual amp): pick a genre or search, and the station plays on this device. The amp\'s power, volume and mute still decide what you hear.'],
       ['ul', [
-        'Presets 1 to 6 play your HEOS Favourites. They stay empty until you add favourites (in the HEOS app, or with the remote\'s Favorites Add while a station plays).',
+        'Presets are your HEOS Favourites, shown by name (and logo when HEOS has one): Preset 1 is favourite 1, and so on. Tap one to play it; the remote\'s number buttons 1 to 9 do the same.',
+        'Save a preset with ☆: next to any TuneIn station in the list (it is saved without interrupting what is playing), or next to what is playing (only shown when HEOS allows it: Bluetooth, AUX and plain stream addresses cannot be favourites). Presets → Edit → ✕ removes one.',
+        'To pick the exact slot number or reorder presets, use the HEOS app, or the real remote: Favorites Add, choose the number with ▲▼, then Enter.',
         'The stream box takes direct audio addresses only (for example ending in .mp3 or .aac). Links to Spotify, YouTube or Apple Music are web pages, not audio: the box tells you what to do instead.'
       ]]
     ] },

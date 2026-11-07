@@ -421,6 +421,20 @@ test('spotify: links, PKCE sign-in, token refresh, tokens never leave the server
   assert.equal((fs.statSync(file).mode & 0o777).toString(8), '600');
 });
 
+test('heos playStream sends the address as HEOS expects (not fully percent-encoded)', async () => {
+  const HEOSDriver = require('../src/drivers/heos');
+  const driver = new HEOSDriver({ host: '127.0.0.1', pid: '7', streamVerifyAttempts: 1, streamVerifyMs: 1 });
+  const sent = [];
+  driver._request = async (cmd) => {
+    sent.push(cmd);
+    if (cmd.includes('get_play_state')) return { heos: { result: 'success', message: 'pid=7&state=play' } };
+    return { heos: { result: 'success', message: '' } };
+  };
+  await driver.playStream('http://strm.example.fm/live_mp3?id=5&q=hi');
+  assert.equal(sent[0], 'heos://browse/play_stream?pid=7&url=http://strm.example.fm/live_mp3?id%3D5%26q%3Dhi');
+  await assert.rejects(() => driver.playStream('http://x.example/a\r\nheos://system/sign_out'), /invalid stream address/);
+});
+
 test('heos playStream and playPreset fail clearly when HEOS cannot play', async () => {
   const HEOSDriver = require('../src/drivers/heos');
   const driver = new HEOSDriver({

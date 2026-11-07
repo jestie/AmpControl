@@ -300,7 +300,10 @@ class HEOSDriver extends BaseDriver {
 
   async playStream(url) {
     const pid = await this._ensurePid();
-    await this._command(`heos://browse/play_stream?pid=${pid}&url=${encodeURIComponent(url)}`);
+    // HEOS reads the URL as-is: only '&', '=' and '%' may be escaped (full
+    // percent-encoding of 'http://' makes the amp accept it and then never play).
+    if (/[\r\n]/.test(String(url))) throw new Error('invalid stream address');
+    await this._command(`heos://browse/play_stream?pid=${pid}&url=${HEOSDriver._encodeValue(url)}`);
 
     // Some firmware accepts the URL and then does nothing (for example when
     // online services are unavailable because HEOS is not signed in). Do not

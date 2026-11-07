@@ -23,3 +23,6 @@ public/img/*.webp
 
 # Everything the app stores at runtime (users, alarms, reminders)
 data/
+
+# Security scan reports stay local (they describe unfixed findings)
+Reports/

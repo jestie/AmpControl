@@ -152,9 +152,19 @@
       });
       if (card.faceplate) refs.root.insertBefore(card.faceplate.root, refs.root.children[1]);
     }
+    if (window.Faces) {
+      card.faces = window.Faces.create({
+        device,
+        post: (path, body) => api(`/api/devices/${card.id}/${path}`, { method: 'POST', body: JSON.stringify(body) }),
+        refresh: () => refresh(card.id, { quiet: true }),
+        toast,
+        levels: () => (card.visualizer ? card.visualizer.levels() : null)
+      });
+      (card.faceplate ? card.faceplate.root : refs.root.querySelector('.card-head')).after(card.faces.root);
+    }
     if (window.Visualizer) {
       card.visualizer = window.Visualizer.create();
-      (card.faceplate ? card.faceplate.root : refs.root.querySelector('.card-head')).after(card.visualizer.root);
+      (card.faces ? card.faces.root : card.faceplate ? card.faceplate.root : refs.root.querySelector('.card-head')).after(card.visualizer.root);
     }
 
     // ---- Internet radio (TuneIn via HEOS) ----
@@ -443,6 +453,7 @@
     { id: 'remote', label: '🎛 Controls' },
     { id: 'handset', label: '📟 Remote' },
     { id: 'radio', label: '📻 Radio' },
+    { id: 'clock', label: '⏰ Clock' },
     { id: 'settings', label: '⚙ Settings' }
   ];
   const WIDE = window.matchMedia('(min-width: 1000px)');
@@ -453,14 +464,70 @@
     const head = root.querySelector('.card-head');
     const nowPlaying = root.querySelector('.now-playing');
 
-    const stage = el('div', { class: 'stage' }, [head, card.faceplate && card.faceplate.root, card.visualizer && card.visualizer.root]);
+    const stage = el('div', { class: 'stage' }, [head, card.faceplate && card.faceplate.root, card.faces && card.faces.root, card.visualizer && card.visualizer.root]);
+
+    // ---- editable heading ----
+    const nameEl = head.querySelector('h2');
+    const roomEl = head.querySelector('.room');
+    const editBtn = el('button', { type: 'button', class: 'mini edit-name', 'aria-label': 'Rename', title: 'Rename', text: '✎' });
+    nameEl.append(' ', editBtn);
+    editBtn.addEventListener('click', () => {
+      const nameIn = el('input', { type: 'text', maxlength: '60', value: device.name, 'aria-label': 'Name' });
+      const roomIn = el('input', { type: 'text', maxlength: '60', value: device.room || '', placeholder: 'Room or note (optional)', 'aria-label': 'Room' });
+      const save = el('button', { type: 'submit', class: 'primary', text: 'Save' });
+      const cancel = el('button', { type: 'button', text: 'Cancel' });
+      const form = el('form', { class: 'rename-form' }, [nameIn, roomIn, el('div', { class: 'row' }, [save, cancel])]);
+      const original = head.firstChild;
+      original.replaceWith(form);
+      nameIn.focus();
+      nameIn.select();
+      cancel.addEventListener('click', () => form.replaceWith(original));
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try {
+          const label = await api(`/api/devices/${card.id}/label`, { method: 'POST', body: JSON.stringify({ name: nameIn.value, room: roomIn.value }) });
+          device.name = label.name;
+          device.room = label.room;
+          nameEl.firstChild.textContent = label.name;
+          roomEl.textContent = label.room;
+          form.replaceWith(original);
+        } catch (e) { toast(e.message); }
+      });
+    });
+
+    // ---- front panel choice: the photo (if added) or a digital face ----
+    const FACE_KEY = `soundcontrol.face.${device.id}`;
+    const faceSelect = el('select', { 'aria-label': 'Front panel' }, [
+      card.faceplate ? el('option', { value: 'photo', text: 'Photo of the amp' }) : null,
+      ...(window.Faces ? window.Faces.SKINS.map((s) => el('option', { value: s.id, text: s.label })) : [])
+    ]);
+    function applyFace(choice) {
+      const valid = [...faceSelect.options].some((o) => o.value === choice);
+      const pick = valid ? choice : (card.faceplate ? 'photo' : 'neon');
+      faceSelect.value = pick;
+      if (card.faceplate) card.faceplate.root.hidden = pick !== 'photo';
+      if (card.faces) {
+        card.faces.root.hidden = pick === 'photo';
+        if (pick !== 'photo') card.faces.setSkin(pick);
+      }
+      try { localStorage.setItem(FACE_KEY, pick); } catch (e) { /* fine */ }
+    }
+    let savedFace = null;
+    try { savedFace = localStorage.getItem(FACE_KEY); } catch (e) { savedFace = null; }
+    applyFace(savedFace);
+    faceSelect.addEventListener('change', () => applyFace(faceSelect.value));
+    const faceSection = el('section', { class: 'section appearance' }, [
+      el('div', { class: 'section-label', text: 'Front panel' }),
+      el('label', { class: 'row' }, [el('span', { class: 'grow', text: 'Look' }), faceSelect])
+    ]);
 
     refs.radioHint = el('p', { class: 'muted small tab-hint', text: 'Internet radio needs the amp signed in to HEOS: see the Settings tab.', hidden: 'hidden' });
     const panels = {
       remote: el('div', { class: 'tab-panel', role: 'tabpanel' }, [nowPlaying, refs.transport, refs.volume, refs.inputSection]),
       handset: el('div', { class: 'tab-panel', role: 'tabpanel' }),
       radio: el('div', { class: 'tab-panel', role: 'tabpanel' }, [refs.radioHint, refs.radioSection, refs.presetSection, refs.streamForm]),
-      settings: el('div', { class: 'tab-panel', role: 'tabpanel' }, [refs.accountSection])
+      settings: el('div', { class: 'tab-panel', role: 'tabpanel' }, [faceSection, refs.accountSection]),
+      clock: el('div', { class: 'tab-panel', role: 'tabpanel' })
     };
     refs.accountSection.open = true;
 
@@ -479,7 +546,9 @@
       try { localStorage.setItem(storeKey, id); } catch (e) { /* fine */ }
     }
     TABS.forEach((tab, index) => {
-      const button = el('button', { type: 'button', class: 'tab', role: 'tab', text: tab.label, id: `tab-${device.id}-${tab.id}`, dataset: { tab: tab.id } });
+      const [icon, ...words] = tab.label.split(' ');
+      const button = el('button', { type: 'button', class: 'tab', role: 'tab', id: `tab-${device.id}-${tab.id}`, dataset: { tab: tab.id } },
+        [el('span', { class: 'tab-icon', text: icon }), el('span', { class: 'tab-text', text: words.join(' ') })]);
       panels[tab.id].setAttribute('aria-labelledby', button.id);
       button.addEventListener('click', () => select(tab.id));
       button.addEventListener('keydown', (event) => {
@@ -495,7 +564,27 @@
       bar.append(button);
     });
 
-    const deck = el('div', { class: 'deck' }, [bar, panels.remote, panels.handset, panels.radio, panels.settings, refs.note]);
+    const deck = el('div', { class: 'deck' }, [bar, panels.remote, panels.handset, panels.radio, panels.clock, panels.settings, refs.note]);
+
+    // A virtual amp plays internet radio in the page itself.
+    if (device.virtual && window.WebRadioPanel) {
+      card.webradio = window.WebRadioPanel.create({ device, api, toast, visualizer: card.visualizer, refresh: () => refresh(card.id, { quiet: true }) });
+      panels.radio.prepend(card.webradio.section);
+      refs.accountSection.hidden = true;
+      card.webradio.init();
+    }
+
+    // The clock: ghosted over the visualiser, chips under it, its own tab.
+    if (window.Clock && !window.__soundcontrolClock) {
+      window.__soundcontrolClock = true;
+      card.clock = window.Clock.create({ device, api, toast, onOpen: () => select('clock'), getLastStation: card.webradio ? () => card.webradio.lastStation() : null });
+      if (card.visualizer) card.clock.mount(card.visualizer.root);
+      else stage.append(card.clock.ghost, card.clock.chips);
+      panels.clock.append(card.clock.panel);
+      panels.settings.append(card.clock.appearance);
+    } else {
+      buttons.clock.hidden = true;
+    }
     root.replaceChildren(stage, deck);
     root.classList.add('tabbed');
 
@@ -620,6 +709,9 @@
     applyPower(card, data);
     applyNowPlaying(card, data.nowPlaying);
     if (card.faceplate) card.faceplate.update(data);
+    if (card.faces) card.faces.update(data);
+    if (card.webradio) card.webradio.update(data);
+    if (card.clock) card.clock.fillActions(data.inputs);
     if (card.visualizer) card.visualizer.update(data, data.volumeCap);
 
     card.refs.transport.hidden = !caps.transport;
@@ -693,7 +785,7 @@
         cards.set(device.id, card);
         devicesEl.append(card.refs.root);
         refresh(device.id, { quiet: true });
-        if (card.loadAccount) card.loadAccount();
+        if (card.loadAccount && !device.virtual) card.loadAccount();
       }
     } catch (e) {
       if (e.message === 'Session expired') return;

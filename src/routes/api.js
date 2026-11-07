@@ -2,6 +2,7 @@ const express = require('express');
 const { clampVolume, validateStreamUrl } = require('../utils/volume');
 const { csrfProtection } = require('../auth/csrf');
 const { isRemoteKey, pressRemoteKey } = require('../remote');
+const { WebRadio } = require('../webradio');
 
 const PLAY_STATES = new Set(['play', 'pause', 'stop']);
 
@@ -9,7 +10,7 @@ function wrap(handler) {
   return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 }
 
-function createApiRouter({ manager, logger }) {
+function createApiRouter({ manager, logger, scheduler = null, webradio = new WebRadio({ logger }) }) {
   const router = express.Router();
 
   function requireAuth(req, res, next) {
@@ -41,10 +42,23 @@ function createApiRouter({ manager, logger }) {
       room: device.room || '',
       faceplate: device.faceplate || null,
       handset: device.handset || null,
+      virtual: Boolean(device.virtual),
       volumeCap: manager.getVolumeCap(device.id)
     }));
     res.json(devices);
   });
+
+  router.post('/devices/:id/label', wrap(async (req, res) => {
+    if (!manager.getDevice(req.params.id)) return res.status(404).json({ error: 'device not found' });
+    if (typeof manager.setLabel !== 'function') return badRequest(res, 'renaming is not supported');
+    try {
+      const label = manager.setLabel(req.params.id, req.body || {});
+      logger.info({ action: 'rename', device: req.params.id, user: req.session.username });
+      return res.json(label);
+    } catch (e) {
+      return badRequest(res, e.message);
+    }
+  }));
 
   router.get('/session', (req, res) => {
     res.json({ user: req.session.username });
@@ -125,7 +139,7 @@ function createApiRouter({ manager, logger }) {
   router.get('/devices/:id/account', wrap(async (req, res) => {
     const driver = device(req, res);
     if (!driver) return;
-    if (typeof driver.getAccount !== 'function') return badRequest(res, 'this device has no HEOS account');
+    if (typeof driver.getAccount !== 'function' || !(driver.capabilities() || {}).account) return badRequest(res, 'this device has no HEOS account');
     const account = await driver.getAccount();
     if (!account) return res.status(502).json({ error: 'the amp did not answer the account check' });
     res.json(account);
@@ -159,6 +173,100 @@ function createApiRouter({ manager, logger }) {
     const account = await driver.signOut();
     logger.info({ action: 'heos_sign_out', device: req.params.id, user: req.session.username });
     res.json({ ok: true, ...account });
+  }));
+
+  // ---- Browser radio (Radio Browser directory; plays in the page) ----
+  router.get('/webradio/genres', (req, res) => res.json(WebRadio.genres()));
+
+  router.get('/webradio/search', wrap(async (req, res) => {
+    const q = typeof req.query.q === 'string' ? req.query.q : '';
+    const tag = typeof req.query.tag === 'string' ? req.query.tag : '';
+    if (q.length > 60) return badRequest(res, 'search is too long');
+    try {
+      return res.json(await webradio.search({ q, tag }));
+    } catch (e) {
+      return res.status(502).json({ error: `radio directory: ${e.message}` });
+    }
+  }));
+
+  router.get('/webradio/stream/:uuid', wrap(async (req, res) => {
+    try {
+      await webradio.stream(req.params.uuid, req, res);
+    } catch (e) {
+      if (!res.headersSent) res.status(400).json({ error: e.message });
+    }
+  }));
+
+  // The page tells a virtual amp what it is playing (for its display and the clock).
+  router.post('/devices/:id/webradio/playing', wrap(async (req, res) => {
+    const driver = device(req, res);
+    if (!driver) return;
+    const virtual = typeof driver.driverOf === 'function' ? driver.driverOf('virtual') : null;
+    if (!virtual) return badRequest(res, 'only a virtual amp plays browser radio');
+    let station;
+    try { station = await webradio.station((req.body || {}).uuid); } catch (e) { return badRequest(res, e.message); }
+    virtual.setWebStation(station);
+    logger.info({ action: 'webradio_play', device: req.params.id, station: station.name, user: req.session.username });
+    res.json({ ok: true });
+  }));
+
+  // ---- Clock: alarms, timers, reminders ----
+  function withSchedule(handler) {
+    return wrap(async (req, res) => {
+      if (!scheduler) return res.status(503).json({ error: 'the clock is not running' });
+      try {
+        await handler(req, res);
+      } catch (e) {
+        if (e.message === 'not found') return res.status(404).json({ error: 'not found' });
+        return badRequest(res, e.message);
+      }
+      return undefined;
+    });
+  }
+  const audit = (req, action, extra = {}) => logger.info({ action, user: req.session.username, ...extra });
+
+  router.get('/schedule', withSchedule(async (req, res) => res.json(scheduler.list())));
+  router.post('/schedule/alarms', withSchedule(async (req, res) => {
+    const alarm = scheduler.addAlarm(req.body || {});
+    audit(req, 'alarm_add', { alarm: alarm.id, time: alarm.time });
+    res.json(alarm);
+  }));
+  router.patch('/schedule/alarms/:sid', withSchedule(async (req, res) => {
+    const alarm = scheduler.updateAlarm(req.params.sid, req.body || {});
+    audit(req, 'alarm_update', { alarm: alarm.id });
+    res.json(alarm);
+  }));
+  router.delete('/schedule/alarms/:sid', withSchedule(async (req, res) => {
+    scheduler.removeAlarm(req.params.sid);
+    audit(req, 'alarm_remove', { alarm: req.params.sid });
+    res.json({ ok: true });
+  }));
+  router.post('/schedule/alarms/:sid/test', withSchedule(async (req, res) => {
+    const alarm = scheduler.list().alarms.find((a) => a.id === req.params.sid);
+    if (!alarm) return res.status(404).json({ error: 'not found' });
+    audit(req, 'alarm_test', { alarm: alarm.id });
+    await scheduler.fireAlarm(alarm);
+    return res.json({ ok: true });
+  }));
+  router.post('/schedule/timers', withSchedule(async (req, res) => {
+    const timer = scheduler.addTimer(req.body || {});
+    audit(req, 'timer_add', { timer: timer.id, seconds: timer.seconds, standby: timer.action === 'standby' });
+    res.json(timer);
+  }));
+  router.delete('/schedule/timers/:sid', withSchedule(async (req, res) => {
+    scheduler.cancelTimer(req.params.sid);
+    audit(req, 'timer_cancel', { timer: req.params.sid });
+    res.json({ ok: true });
+  }));
+  router.post('/schedule/reminders', withSchedule(async (req, res) => {
+    const reminder = scheduler.addReminder(req.body || {});
+    audit(req, 'reminder_add', { reminder: reminder.id });
+    res.json(reminder);
+  }));
+  router.delete('/schedule/reminders/:sid', withSchedule(async (req, res) => {
+    scheduler.removeReminder(req.params.sid);
+    audit(req, 'reminder_remove', { reminder: req.params.sid });
+    res.json({ ok: true });
   }));
 
   // The handset: one button per request, from a fixed list.

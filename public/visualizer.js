@@ -106,6 +106,7 @@
 
     function stopLive() {
       if (!live) return;
+      if (live.external) { live = null; spectrum = null; root.classList.remove('live'); return; }
       live.stream.getTracks().forEach((track) => track.stop());
       live.ctx.close().catch(() => {});
       live = null;
@@ -118,8 +119,27 @@
 
     micBtn.addEventListener('click', (event) => {
       event.stopPropagation();          // do not change the colours
-      if (live) stopLive(); else startLive();
+      if (live && !live.external) stopLive(); else startLive();
     });
+
+    // Browser radio hands over its own analyser: the waves follow the real music.
+    let external = null;
+    function useAnalyser(analyser, sampleRate) {
+      if (live && !live.external) stopLive();
+      external = analyser ? { ctx: { sampleRate }, analyser, bins: new Uint8Array(analyser.frequencyBinCount), external: true } : null;
+      live = external;
+      spectrum = null;
+      root.classList.toggle('live', Boolean(external));
+      start();
+    }
+
+    // Levels for the faces' meters: real when analysing, otherwise from the amp's state.
+    function levels() {
+      if (live) return { live: true, energy, bands: bandLevel.slice(), spectrum };
+      const t = performance.now() / 1000;
+      const wobble = (k) => Math.max(0, Math.min(1, energy * (0.75 + 0.25 * Math.sin(t * (2.1 + k) + k * 1.7))));
+      return { live: false, energy, bands: [wobble(0), wobble(1), wobble(2), wobble(3)], spectrum: null };
+    }
 
     function readLive() {
       const { analyser, bins, ctx: actx } = live;
@@ -171,10 +191,15 @@
       clearTimeout(labelTimer);
       labelTimer = setTimeout(() => label.classList.remove('show'), 1400);
     }
+    // Let the rest of the app (ghost clock, accent colour) follow the palette.
+    function emitPalette() {
+      window.dispatchEvent(new CustomEvent('sc:palette', { detail: { ...PALETTES[paletteIndex] } }));
+    }
     function nextPalette() {
       paletteIndex = (paletteIndex + 1) % PALETTES.length;
       savePalette(paletteIndex);
       setLabel();
+      emitPalette();
       if (!running) draw(performance.now());
     }
     root.addEventListener('click', nextPalette);
@@ -303,8 +328,8 @@
       start();
     }
 
-    requestAnimationFrame(() => { resize(); start(); });
-    return { root, update };
+    requestAnimationFrame(() => { resize(); start(); emitPalette(); });
+    return { root, update, useAnalyser, levels };
   }
 
   window.Visualizer = { create };

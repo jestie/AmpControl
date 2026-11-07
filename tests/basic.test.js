@@ -247,6 +247,123 @@ test('remote: only known buttons, sleep steps, capped volume, honest menu keys',
   await assert.rejects(() => pressRemoteKey(driver, 'src_optcoax', { volumeCap: 40 }), /ignored OPT2/);
 });
 
+test('clock: alarms fire once on the right days, capped and faded; timers and reminders ring', async () => {
+  const os = require('os');
+  const { Scheduler } = require('../src/schedule');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sc-sched-')), 'schedule.json');
+  let now = new Date(2026, 10, 9, 6, 59, 30);   // Monday 06:59:30 local time
+  const calls = [];
+  const driver = {
+    getInputs: () => [{ id: 'BT', label: 'Bluetooth' }],
+    getPowerState: async () => 'standby',
+    powerOn: async () => calls.push('on'),
+    powerOff: async () => calls.push('standby'),
+    unmute: async () => calls.push('unmute'),
+    setVolume: async (v) => calls.push(`vol ${v}`),
+    radioPlay: async (mid) => calls.push(`radio ${mid}`),
+    setInput: async (id) => calls.push(`input ${id}`)
+  };
+  const manager = {
+    getDevices: () => [{ id: 'amp' }],
+    getDriver: () => driver,
+    getVolumeCap: () => 40
+  };
+  const sched = new Scheduler({ file, manager, now: () => now, wait: async () => {} });
+
+  assert.throws(() => sched.addAlarm({ time: '7:00' }), /HH:MM/);
+  assert.throws(() => sched.addAlarm({ time: '07:00', action: { type: 'radio', mid: 's1&pid=2' } }), /station/);
+  assert.throws(() => sched.addAlarm({ time: '07:00', action: { type: 'shell' } }), /chime, radio or input/);
+
+  const weekday = sched.addAlarm({ time: '07:00', days: [1, 2, 3, 4, 5], volume: 90, action: { type: 'radio', mid: 's24940', name: 'BBC Radio 2' } });
+  assert.equal(weekday.volume, 40, 'alarm volume is capped');
+  const weekend = sched.addAlarm({ time: '07:00', days: [0, 6], action: { type: 'chime' } });
+
+  await sched.tick();
+  assert.equal(calls.length, 0, 'not yet');
+
+  now = new Date(2026, 10, 9, 7, 0, 5);
+  await sched.tick();
+  await new Promise((resolve) => setImmediate(resolve));
+  for (let i = 0; i < 50 && !calls.includes('vol 40'); i += 1) await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(calls.slice(0, 4), ['on', 'vol 4', 'unmute', 'radio s24940']);
+  assert.equal(calls[calls.length - 1], 'vol 40', 'fades up to the alarm volume');
+  assert.ok(calls.filter((c) => c.startsWith('vol')).every((c) => Number(c.split(' ')[1]) <= 40));
+  assert.equal(sched.list().rings.filter((r) => r.kind === 'alarm').length, 1, 'the weekend alarm stays quiet on a Monday');
+
+  const before = calls.length;
+  now = new Date(2026, 10, 9, 7, 0, 40);
+  await sched.tick();
+  assert.equal(calls.length, before, 'fires only once per day');
+  assert.equal(sched.list().alarms.find((a) => a.id === weekend.id).lastFired, null);
+
+  // A one-off alarm switches itself off after ringing.
+  const once = sched.addAlarm({ time: '07:01', action: { type: 'chime' } });
+  now = new Date(2026, 10, 9, 7, 1, 0);
+  await sched.tick();
+  assert.equal(sched.list().alarms.find((a) => a.id === once.id).enabled, false);
+
+  // Timer with standby, and a reminder.
+  sched.addTimer({ seconds: 60, label: 'Tea', action: 'standby' });
+  sched.addReminder({ at: new Date(2026, 10, 9, 7, 1, 30).toISOString(), text: 'Call <b>Dad</b>' });
+  assert.throws(() => sched.addTimer({ seconds: 2 }), /5 seconds/);
+  assert.throws(() => sched.addReminder({ at: new Date(2020, 0, 1).toISOString(), text: 'x' }), /passed/);
+  now = new Date(2026, 10, 9, 7, 2, 5);
+  await sched.tick();
+  const kinds = sched.list().rings.map((r) => r.kind);
+  assert.ok(kinds.includes('timer') && kinds.includes('reminder'));
+  assert.ok(calls.includes('standby'), 'the timer put the amp in standby');
+  assert.equal(sched.list().rings.find((r) => r.kind === 'reminder').label, 'Call <b>Dad</b>', 'stored as text; the page renders it as text');
+
+  // Survives a restart.
+  const again = new Scheduler({ file, manager, now: () => now, wait: async () => {} });
+  assert.equal(again.list().alarms.length, 3);
+});
+
+test('browser radio: only directory stations, never private addresses', async () => {
+  const { WebRadio, isPrivateAddress } = require('../src/webradio');
+  for (const ip of ['127.0.0.1', '10.1.2.3', '192.168.1.50', '172.20.0.1', '169.254.1.1', '100.64.0.1', '::1', 'fd00::1', 'fe80::1', '::ffff:192.168.1.1', '0.0.0.0']) {
+    assert.equal(isPrivateAddress(ip), true, ip);
+  }
+  for (const ip of ['8.8.8.8', '151.101.1.1', '2a00:1450::1']) assert.equal(isPrivateAddress(ip), false, ip);
+
+  const uuid = '11111111-2222-3333-4444-555555555555';
+  const radio = new WebRadio({ fetchJson: async (p) => {
+    assert.ok(p.startsWith('/json/stations/'), p);
+    return [
+      { stationuuid: uuid, name: 'Jazz One', url_resolved: 'http://stream.example/jazz', favicon: 'http://insecure/logo.png', tags: 'jazz,smooth', hls: 0 },
+      { stationuuid: '22222222-2222-3333-4444-555555555555', name: 'HLS', url_resolved: 'https://x.example/live.m3u8', hls: 1 },
+      { stationuuid: 'not-a-uuid', name: 'Bad', url_resolved: 'http://x' },
+      { stationuuid: '33333333-2222-3333-4444-555555555555', name: 'File', url_resolved: 'file:///etc/passwd' }
+    ];
+  } });
+  const list = await radio.search({ q: 'jazz' });
+  assert.deepEqual(list.map((s) => s.name), ['Jazz One'], 'HLS, bad ids and non-http streams are dropped');
+  assert.equal(list[0].favicon, '', 'only https logos');
+  assert.ok(!('url' in list[0]), 'the stream address is never sent to the browser');
+  await assert.rejects(() => radio.search({ tag: 'evil' }), /unknown genre/);
+  await assert.rejects(() => radio.station('../../etc'), /invalid station/);
+});
+
+test('virtual amp keeps state and is the default without a config', async () => {
+  const VirtualDriver = require('../src/drivers/virtual');
+  const { loadDevices } = require('../src/config/devices');
+  const amp = new VirtualDriver({});
+  assert.equal(await amp.getPowerState(), 'standby');
+  await amp.powerOn();
+  await amp.setVolume(150);
+  assert.equal(await amp.getVolume(), 100);
+  await assert.rejects(() => amp.setInput('HDMI'), /unknown input/);
+  amp.setWebStation({ uuid: 'u', name: 'Jazz One', favicon: '' });
+  assert.equal((await amp.getNowPlaying()).station, 'Jazz One');
+  const saved = process.env.DEVICES_CONFIG;
+  process.env.DEVICES_CONFIG = '/nonexistent/devices.json';
+  try {
+    assert.equal(loadDevices()[0].type, 'virtual');
+  } finally {
+    if (saved === undefined) delete process.env.DEVICES_CONFIG; else process.env.DEVICES_CONFIG = saved;
+  }
+});
+
 test('heos playStream and playPreset fail clearly when HEOS cannot play', async () => {
   const HEOSDriver = require('../src/drivers/heos');
   const driver = new HEOSDriver({

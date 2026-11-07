@@ -3,6 +3,7 @@ require('dotenv').config();
 const createApp = require('./app');
 const manager = require('./manager');
 const logger = require('./utils/logger');
+const { Scheduler } = require('./schedule');
 
 const PORT = parseInt(process.env.PORT, 10) || 8095;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -13,7 +14,9 @@ async function main() {
     logger.error({ action: 'device_init', device: error.device, driver: error.driver, error: error.error });
   }
 
-  const app = createApp({ manager, logger });
+  const scheduler = new Scheduler({ manager, logger });
+  scheduler.start();
+  const app = createApp({ manager, logger, scheduler });
   const server = app.listen(PORT, HOST, () => {
     logger.info({ action: 'start', host: HOST, port: PORT, devices: manager.getDevices().map((d) => d.id) });
     console.log(`SoundControl listening on http://${HOST}:${PORT}`);
@@ -24,6 +27,7 @@ async function main() {
     if (shuttingDown) return;
     shuttingDown = true;
     logger.info({ action: 'shutdown', signal });
+    scheduler.stop();
     server.close(async () => {
       await manager.close();
       process.exit(0);

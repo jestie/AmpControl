@@ -20,3 +20,6 @@ public/img/*.png
 public/img/*.jpg
 public/img/*.jpeg
 public/img/*.webp
+
+# Everything the app stores at runtime (users, alarms, reminders)
+data/

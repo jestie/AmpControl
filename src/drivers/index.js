@@ -1,6 +1,7 @@
 const HEOSDriver = require('./heos');
 const DenonAVRDriver = require('./denon_avr');
 const UnsupportedDriver = require('./unsupported');
+const VirtualDriver = require('./virtual');
 
 /**
  * Driver registry. Add new protocols here; a device only needs a config entry.
@@ -12,7 +13,8 @@ const drivers = {
   denon_avr: DenonAVRDriver,
   marantz: DenonAVRDriver,
   avr: DenonAVRDriver,
-  unsupported: UnsupportedDriver
+  unsupported: UnsupportedDriver,
+  virtual: VirtualDriver
 };
 
 function createDriver(type, config = {}) {

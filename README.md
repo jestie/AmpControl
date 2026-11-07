@@ -7,6 +7,11 @@ Built for and tested on a **Marantz PM7000N** (HEOS + the Marantz/Denon network
 control protocol). The design is device-agnostic: one driver per protocol,
 devices added by configuration.
 
+**No amp? No problem.** Without a device config the app starts with a
+**virtual amp**: pick a digital front panel, play thousands of internet radio
+stations right on your phone or PC, and watch the visualiser and meters move to
+the real music.
+
 > Not affiliated with or endorsed by Marantz, Denon, HEOS or TuneIn. Product
 > names are used only to say what this works with.
 
@@ -14,6 +19,15 @@ devices added by configuration.
 
 - **Power, volume, mute and input**, with a per-device volume cap enforced on
   the server (default 40%), so a slip cannot blast the room.
+- **Digital front panels**: three original skins drawn in code (Neon glass,
+  Retro VU with swinging needles, Minimal pro), with a draggable volume dial
+  and meters that follow the music. Pick one in Settings.
+- **Browser radio** (virtual amp): browse genres or search the open
+  [Radio Browser](https://www.radio-browser.info) directory and play in the
+  page. The server passes the stream through so the visualiser can analyse the
+  real audio; it only streams stations from the directory and refuses any
+  private or local network address.
+- **Name it yourself**: tap ✎ to rename a device and its room line.
 - **Interactive front panel** (optional, needs photos, see below): turn the
   real volume knob, click through inputs with the input knob, press power and
   Source Direct, and read the live state on the amp's own display.
@@ -27,6 +41,12 @@ devices added by configuration.
 - **Sound visualiser**: animated waves that follow the amp's state, or listen
   through the microphone (🎤) and react to the real sound in the room.
   Analysed in the browser only; nothing is recorded or sent anywhere.
+- **Ghost clock, alarms, timers and reminders**: a translucent digital clock
+  floats over the visualiser in its colours. Alarms run on the server, so they
+  work with no browser open, and can wake you to a radio station or an input,
+  fading up to a chosen volume (never above the cap). Timers can put the amp in
+  standby when done; reminders chime and can show desktop notifications.
+- **Theme**: the app's accent colour can follow the visualiser palette.
 - **Sleep timer, random, repeat, favourites 1–9, Source Direct.**
 - Tabs on phones, a three-column layout on wide screens, dark theme throughout.
 
@@ -65,6 +85,7 @@ cp .env.example .env
 # put a real secret in .env (32+ random characters):
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
+# Have a network amp? Configure it (skip this for the virtual amp):
 cp config/devices.json.example config/devices.json
 # edit config/devices.json: set your amp's IP address
 
@@ -115,6 +136,7 @@ Edit `config/devices.json` (schema in [`docs/DRIVERS.md`](docs/DRIVERS.md)).
 |---|---|---|
 | `heos` | HEOS CLI, TCP 1255 | playback, now playing, radio, favourites, HEOS account, transport |
 | `denon_avr` / `marantz` | Marantz/Denon network control, TCP 23 | power, volume, mute, inputs, Source Direct, sleep timer, menu keys |
+| `virtual` | none | a virtual amp for browser radio: power, volume, mute, inputs |
 | `unsupported` | none | an honest "no network control" placeholder |
 
 A device lists the drivers it needs; their capabilities are merged and the UI
@@ -157,7 +179,8 @@ npm test
 
 Covers volume capping, driver routing and fallback, password hashing and login
 lockout, CSRF, HEOS sign-in (password escaping, never leaked in errors), radio
-command safety, Source Direct read-back, the handset's button rules, and an
+command safety, Source Direct read-back, the handset's button rules, alarms
+(days, once-only, capped fade-up) with a fake clock, and an
 HTTP round trip with a fake device. No hardware or network needed.
 
 ## Layout
@@ -167,10 +190,13 @@ src/app.js          express app (auth, sessions, CSP, views)
 src/server.js       startup/shutdown, device init
 src/routes/api.js   REST API, capability checks, volume cap
 src/remote.js       the handset: button -> action, from a fixed list
+src/schedule.js     alarms, timers, reminders (data/schedule.json, not in git)
 src/manager.js      loads devices, builds composite drivers
 src/drivers/        heos, denon_avr, composite, unsupported
 src/auth/           users (bcrypt), csrf, login limiter
-public/             app.js, faceplate.js, handset.js, visualizer.js, app.css
+public/             app.js, faces.js, webradio.js, faceplate.js, handset.js,
+                    visualizer.js, clock.js, app.css
+src/webradio.js     Radio Browser search + safe stream pass-through
 views/              login + app shell
 tests/              node:test suite
 config/             devices.json.example

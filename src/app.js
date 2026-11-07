@@ -33,7 +33,7 @@ function sessionSecret() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-function createApp({ manager = require('./manager'), logger = require('./utils/logger'), limiter } = {}) {
+function createApp({ manager = require('./manager'), logger = require('./utils/logger'), limiter, scheduler = null } = {}) {
   const app = express();
   const pageTemplate = fs.readFileSync(path.join(VIEWS, 'index.html'), 'utf8');
   const loginTemplate = fs.readFileSync(path.join(VIEWS, 'login.html'), 'utf8');
@@ -168,7 +168,7 @@ function createApp({ manager = require('./manager'), logger = require('./utils/l
     res.json({ ok: true });
   });
 
-  app.use('/api', createApiRouter({ manager, logger }));
+  app.use('/api', createApiRouter({ manager, logger, scheduler }));
 
   app.use((req, res) => {
     if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'not found' });

@@ -96,6 +96,7 @@ class CompositeDriver extends BaseDriver {
       sourceDirect: false,
       account: false,
       radio: false,
+      webRadio: false,
       presets: false,
       playStream: false,
       transport: false,

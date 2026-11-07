@@ -18,7 +18,7 @@
         'Every change you make is sent to the amp and read back, so what you see is what the amp is really doing.'
       ]],
       ['p', 'No network amp? SoundControl then runs a virtual amp: internet radio plays on the device you are using, and everything else (faces, speakers, clock, alarms) works the same.'],
-      ['p', 'Supported amps: Denon and Marantz (HEOS and network control; tested on a Marantz PM7000N). Experimental, not yet tested on real hardware: Yamaha MusicCast, Onkyo / Pioneer / Integra, and Bluesound / NAD (BluOS). Devices are added in config/devices.json; see docs/DRIVERS.md.'],
+      ['p', 'Supported amps: Denon and Marantz (HEOS and network control; tested on a Marantz PM7000N). Experimental, not yet tested on real hardware: Yamaha MusicCast, Onkyo / Pioneer / Integra, and Bluesound / NAD (BluOS). Admins add them in Settings → 🔌 Devices (Detect by IP, or Scan network).'],
       ['tip', 'Press ? or F1 at any time to open this Help. Esc closes it.']
     ] },
     { id: 'controls', icon: '🎛', title: 'Controls tab', body: [
@@ -107,8 +107,10 @@
         '🎵 Spotify: setup and connection.',
         'HEOS account: sign the amp in to HEOS to unlock TuneIn radio and favourites. The password goes straight to the amp and is never stored by this app.',
         'Appearance: accent colour (match the visualiser, or classic blue) and clock position.',
-        'Rename: tap ✎ next to the device name to change its name and room line; every device sees the new name.'
-      ]]
+        'Rename: tap ✎ next to the device name to change its name and room line; every device sees the new name.',
+        '🔌 Devices (admins): add an amp by typing its IP address and pressing Detect; SoundControl asks it who it is (nothing on the amp changes) and suggests the setup. Or scan your network to find amps you don\'t know the address of. Remove a device with ✕.'
+      ]],
+      ['warn', 'Scanning the network connects to every address on the amps\' control ports. Security tools (an IPS, firewall or SIEM) may report it as a port scan. Use Detect with a known IP when you can.']
     ] },
     { id: 'phone', icon: '📱', title: 'Using it on your phone', body: [
       ['ul', [

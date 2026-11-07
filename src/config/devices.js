@@ -12,8 +12,20 @@ const DEFAULT_DEVICES = [{
   volumeCap: 60
 }];
 
+const configPath = () => process.env.DEVICES_CONFIG || path.join(__dirname, '../../config/devices.json');
+
+/** Write the device list (keeps a timestamped backup of the previous file). */
+function saveDevices(devices) {
+  const file = configPath();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.bak-${new Date().toISOString().replace(/[:.]/g, '-')}`);
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify(devices, null, 2)}\n`, { mode: 0o600 });
+  fs.renameSync(tmp, file);
+}
+
 function loadDevices() {
-  const configPath = process.env.DEVICES_CONFIG || path.join(__dirname, '../../config/devices.json');
+  const configPath = module.exports.configPath();
   let data;
   try {
     data = fs.readFileSync(configPath, 'utf8');
@@ -27,4 +39,4 @@ function loadDevices() {
   }
 }
 
-module.exports = { loadDevices, DEFAULT_DEVICES };
+module.exports = { loadDevices, saveDevices, configPath, DEFAULT_DEVICES };

@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
-const { loadDevices } = require('./config/devices');
+const { loadDevices, saveDevices } = require('./config/devices');
+const { isPrivateLan } = require('./discovery');
 const { createDriver } = require('./drivers');
 const CompositeDriver = require('./drivers/composite');
 
@@ -132,6 +133,53 @@ class DeviceManager {
 
   async close() {
     await Promise.allSettled([...this.drivers.values()].map((driver) => driver.close()));
+  }
+
+  async reload() {
+    await this.close();
+    await this.init();
+  }
+
+  /** Add a device from the "Add device" screen (admin only, see api.js). */
+  async addDevice(input = {}) {
+    const { drivers: known } = require('./drivers');
+    const clean = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
+    const name = clean(input.name, 60);
+    if (!name) throw new Error('give the device a name');
+    const host = clean(input.host, 15);
+    if (!isPrivateLan(host)) throw new Error('the address must be a home-network IP, e.g. 192.168.1.40');
+    const config = input.config && typeof input.config === 'object' ? input.config : {};
+    const drivers = Array.isArray(config.drivers) ? config.drivers.filter((d) => typeof d === 'string' && known[d]) : [];
+    if (!drivers.length || drivers.length > 3) throw new Error('unknown device type');
+    const cap = Number(input.volumeCap);
+    const volumeCap = Number.isInteger(cap) && cap >= 1 && cap <= 100 ? cap : 40;
+
+    const all = loadDevices();
+    const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'device';
+    let id = base;
+    for (let i = 2; all.some((d) => d && d.id === id); i += 1) id = `${base}-${i}`;
+    if (all.some((d) => d && [d.host, ...drivers.map((t) => d[t] && d[t].host)].includes(host) && d.enabled !== false)) {
+      throw new Error('a device with that address is already set up');
+    }
+    // Only known fields are copied: the browser cannot add anything else to the config.
+    const device = { id, name, room: clean(input.room, 60), enabled: true, host, volumeCap, drivers, type: drivers[0] };
+    for (const t of drivers) {
+      const block = config[t] && typeof config[t] === 'object' ? config[t] : {};
+      device[t] = { host };
+      if (Number.isInteger(block.port) && block.port > 0 && block.port < 65536) device[t].port = block.port;
+      if (t === 'denon_avr') { device[t].volumeMax = 100; device[t].inputs = []; }
+    }
+    if (drivers.includes('heos')) device.port = 1255;
+    saveDevices([...all, device]);
+    await this.reload();
+    return { id, name };
+  }
+
+  async removeDevice(id) {
+    const all = loadDevices();
+    if (!all.some((d) => d && d.id === id)) throw new Error('device not found');
+    saveDevices(all.filter((d) => d && d.id !== id));
+    await this.reload();
   }
 }
 

@@ -623,6 +623,12 @@
       faceSection.after(card.spotify.setup);
     }
 
+    // Settings → Devices (admins): add, detect, scan, remove. Once per page.
+    if (window.DevicesAdmin && !window.__soundcontrolDevicesAdmin) {
+      window.__soundcontrolDevicesAdmin = true;
+      panels.settings.append(window.DevicesAdmin.create({ api, toast }).section);
+    }
+
     // A virtual amp plays internet radio in the page itself.
     if (device.virtual && window.WebRadioPanel) {
       card.webradio = window.WebRadioPanel.create({ device, api, toast, visualizer: card.visualizer, refresh: () => refresh(card.id, { quiet: true }) });

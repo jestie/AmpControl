@@ -5,6 +5,7 @@ const { isRemoteKey, pressRemoteKey } = require('../remote');
 const { WebRadio } = require('../webradio');
 const { versionInfo } = require('../version');
 const { publicError } = require('../drivers/errors');
+const { probe, Scanner } = require('../discovery');
 
 const PLAY_STATES = new Set(['play', 'pause', 'stop']);
 
@@ -67,6 +68,47 @@ function createApiRouter({ manager, logger, scheduler = null, webradio = new Web
     } catch (e) {
       return badRequest(res, e.message);
     }
+  }));
+
+  // ---- Devices: detect, scan, add, remove (admin only) ----
+  const scanner = new Scanner({ logger });
+  const adminJson = (handler) => [requireAdmin, wrap(async (req, res) => {
+    try {
+      await handler(req, res);
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  })];
+
+  router.get('/admin/devices', ...adminJson(async (req, res) => {
+    const subnets = new Set();
+    const list = manager.getDevices().map((d) => {
+      const cfg = manager.getDevice(d.id) || {};
+      const types = Array.isArray(cfg.drivers) ? cfg.drivers : [cfg.type].filter(Boolean);
+      const host = cfg.host || (types[0] && cfg[types[0]] && cfg[types[0]].host) || '';
+      if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) subnets.add(host.replace(/\.\d+$/, '.0/24'));
+      return { id: d.id, name: d.name, room: d.room, drivers: types, host };
+    });
+    res.json({ devices: list, subnets: [...subnets] });
+  }));
+  router.post('/discovery/probe', ...adminJson(async (req, res) => {
+    logger.info({ action: 'device_probe', host: String((req.body || {}).host || '').slice(0, 15), user: req.session.username });
+    res.json(await probe((req.body || {}).host));
+  }));
+  router.post('/discovery/scan', ...adminJson(async (req, res) => {
+    res.json(scanner.start((req.body || {}).subnet, { user: req.session.username }));
+  }));
+  router.get('/discovery/scan', ...adminJson(async (req, res) => res.json(scanner.status())));
+  router.post('/discovery/scan/stop', ...adminJson(async (req, res) => res.json(scanner.stop())));
+  router.post('/devices', ...adminJson(async (req, res) => {
+    const added = await manager.addDevice(req.body || {});
+    logger.info({ action: 'device_add', device: added.id, user: req.session.username });
+    res.json(added);
+  }));
+  router.delete('/devices/:id', ...adminJson(async (req, res) => {
+    await manager.removeDevice(req.params.id);
+    logger.info({ action: 'device_remove', device: req.params.id, user: req.session.username });
+    res.json({ ok: true });
   }));
 
   // Version + release notes (signed-in only; read once per process).

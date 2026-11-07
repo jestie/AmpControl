@@ -38,6 +38,11 @@ the real music.
 - **Speakers**: tap the side tabs to slide a pair of bookshelf speakers out
   beside the amp; tap one to take its grille off. The cones punch out on the
   beat and the tweeters flick on cymbals, more as the volume goes up.
+- **Add devices from the app**: Settings → 🔌 Devices (admins). Type an IP and
+  press Detect: SoundControl asks the device who it is (read-only) and suggests
+  the setup. Or scan a home network (/24) to find amps; note that security
+  tools may report a scan as a port scan. Works where multicast discovery
+  cannot (e.g. WSL in NAT mode). Only private addresses can be probed.
 - **Name it yourself**: tap ✎ to rename a device and its room line.
 - **Help built in**: the ? Help button (or press ? / F1) opens a searchable
   guide to every feature, troubleshooting and privacy notes, plus What's new.
@@ -230,6 +235,7 @@ public/             app.js, faces.js, webradio.js, faceplate.js, handset.js,
                     visualizer.js, clock.js, app.css
 src/webradio.js     Radio Browser search + safe stream pass-through
 src/spotify.js      Spotify sign-in (PKCE) and playback via the Web API
+src/discovery.js    detect amps by IP (read-only queries) and scan a home /24
 views/              login + app shell
 tests/              node:test suite
 config/             devices.json.example

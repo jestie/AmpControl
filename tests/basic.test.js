@@ -603,6 +603,70 @@ test('bluos (Bluesound/NAD) driver against a fake player', async () => {
   } finally { srv.close(); }
 });
 
+test('discovery: identifies each brand with read-only queries (fake devices)', async () => {
+  const net = require('net');
+  const http = require('http');
+  const { probe, parseSubnet, isPrivateLan } = require('../src/discovery');
+  const OnkyoDriver = require('../src/drivers/onkyo');
+  const listen = (srv) => new Promise((r) => srv.listen(0, '127.0.0.1', () => r(srv.address().port)));
+  const heos = net.createServer((s) => s.on('data', (c) => { if (c.toString().startsWith('heos://player/get_players')) s.write('{"heos": {"command": "player/get_players", "result": "success", "message": ""}, "payload": [{"name": "Office Amp", "pid": 1, "model": "Marantz PM7000N"}]}\r\n'); }));
+  const avr = net.createServer((s) => s.on('data', (c) => { if (c.toString() === 'PW?\r') s.write('PWSTANDBY\r'); }));
+  const yam = http.createServer((req, res) => res.end(req.url.includes('getDeviceInfo') ? '{"response_code":0,"model_name":"RX-V6A"}' : '{}'));
+  const onk = net.createServer((s) => s.on('data', () => s.write(OnkyoDriver.frame('ECNTX-NR696/60128/DX/0009B0123456'))));
+  const blu = http.createServer((req, res) => res.end(req.url === '/SyncStatus' ? '<SyncStatus name="Kitchen" brand="Bluesound" modelName="NODE" />' : ''));
+  const ports = { heos: await listen(heos), avr: await listen(avr), yamaha: await listen(yam), eiscp: await listen(onk), bluos: await listen(blu) };
+  try {
+    const marantz = await probe('127.0.0.1', { ports: { heos: ports.heos, avr: ports.avr }, allowLoopback: true });
+    assert.deepEqual(marantz.found.map((f) => f.protocol), ['heos', 'denon_avr']);
+    assert.equal(marantz.suggestion.brand, 'Marantz');
+    assert.equal(marantz.suggestion.name, 'Office Amp');
+    assert.deepEqual(marantz.suggestion.drivers, ['heos', 'denon_avr']);
+    const y = await probe('127.0.0.1', { ports: { yamaha: ports.yamaha }, allowLoopback: true });
+    assert.deepEqual([y.suggestion.brand, y.suggestion.model, y.suggestion.drivers[0]], ['Yamaha', 'RX-V6A', 'yamaha']);
+    const o = await probe('127.0.0.1', { ports: { eiscp: ports.eiscp }, allowLoopback: true });
+    assert.deepEqual([o.suggestion.model, o.suggestion.drivers[0]], ['TX-NR696', 'onkyo']);
+    const b = await probe('127.0.0.1', { ports: { bluos: ports.bluos }, allowLoopback: true });
+    assert.deepEqual([b.suggestion.brand, b.suggestion.name, b.suggestion.drivers[0]], ['Bluesound', 'Kitchen', 'bluos']);
+    const nothing = await probe('127.0.0.1', { ports: { yamaha: ports.heos }, allowLoopback: true, timeout: 300 });
+    assert.equal(nothing.suggestion, null, 'a port that answers but is not that protocol is not misidentified');
+  } finally { [heos, avr, yam, onk, blu].forEach((x) => x.close()); }
+  await assert.rejects(() => probe('8.8.8.8'), /home-network/);
+  await assert.rejects(() => probe('127.0.0.1'), /home-network/, 'loopback only in tests');
+  assert.equal(parseSubnet('192.168.1.0/24'), '192.168.1');
+  assert.throws(() => parseSubnet('8.8.8.0/24'), /private/);
+  assert.throws(() => parseSubnet('10.0.0.0/8'), /\/24/);
+  assert.equal(isPrivateLan('172.32.0.1'), false);
+});
+
+test('add / remove device: validated, backed up, reloaded', async () => {
+  const { DeviceManager } = require('../src/manager');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-dev-'));
+  const saved = process.env.DEVICES_CONFIG;
+  process.env.DEVICES_CONFIG = path.join(dir, 'devices.json');
+  try {
+    const m = new DeviceManager();
+    await m.init();
+    assert.equal(m.getDevices()[0].id, 'virtual', 'starts from the default virtual amp');
+    await assert.rejects(() => m.addDevice({ name: 'X', host: '8.8.8.8', config: { drivers: ['virtual'] } }), /home-network/);
+    await assert.rejects(() => m.addDevice({ name: 'X', host: '192.168.1.40', config: { drivers: ['evil'] } }), /unknown device type/);
+    const added = await m.addDevice({ name: 'Lounge Amp!', room: 'Lounge', host: '192.168.1.40', volumeCap: 300, config: { drivers: ['virtual'], virtual: { port: 99, exec: 'rm -rf /' }, __proto__: { admin: true } } });
+    assert.equal(added.id, 'lounge-amp');
+    const file = JSON.parse(fs.readFileSync(process.env.DEVICES_CONFIG, 'utf8'));
+    const dev = file.find((d) => d.id === 'lounge-amp');
+    assert.equal(dev.volumeCap, 40, 'out-of-range cap falls back to 40');
+    assert.deepEqual(dev.virtual, { host: '192.168.1.40', port: 99 }, 'only known fields are kept');
+    assert.ok(file.some((d) => d.id === 'virtual'), 'existing devices are kept');
+    await assert.rejects(() => m.addDevice({ name: 'Again', host: '192.168.1.40', config: { drivers: ['virtual'] } }), /already set up/);
+    assert.ok(m.getDevices().some((d) => d.id === 'lounge-amp'), 'reloaded without a restart');
+    await m.removeDevice('lounge-amp');
+    assert.ok(!m.getDevices().some((d) => d.id === 'lounge-amp'));
+    assert.ok(fs.readdirSync(dir).some((f) => f.startsWith('devices.json.bak-')), 'backup kept');
+    await m.close();
+  } finally {
+    if (saved === undefined) delete process.env.DEVICES_CONFIG; else process.env.DEVICES_CONFIG = saved;
+  }
+});
+
 test('heos playStream sends the address as HEOS expects (not fully percent-encoded)', async () => {
   const HEOSDriver = require('../src/drivers/heos');
   const driver = new HEOSDriver({ host: '127.0.0.1', pid: '7', streamVerifyAttempts: 1, streamVerifyMs: 1 });

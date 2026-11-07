@@ -643,12 +643,33 @@
       root.classList.add('has-handset');
     }
     const handsetCol = el('div', { class: 'handset-col' });
+    // ☰ in the top bar shows or hides the remote (remembered per browser).
+    const HANDSET_KEY = 'soundcontrol.handset.show';
+    const handsetShown = () => { try { return localStorage.getItem(HANDSET_KEY) !== 'off'; } catch (e) { return true; } };
     function placeHandset() {
       const wide = WIDE.matches;
-      buttons.handset.hidden = !handset || wide;
+      const show = Boolean(handset) && handsetShown();
+      buttons.handset.hidden = !show || wide;
       if (handset) (wide ? handsetCol : panels.handset).append(handset.root);
-      if (wide && handset) root.prepend(handsetCol); else handsetCol.remove();
+      if (wide && show) root.prepend(handsetCol); else handsetCol.remove();
+      root.classList.toggle('has-handset', wide && show);
       if (buttons.handset.hidden && card.tab === 'handset') select('remote');
+      const toggle = document.getElementById('handset-toggle');
+      if (toggle) {
+        toggle.setAttribute('aria-pressed', String(show));
+        toggle.title = show ? 'Hide the remote' : 'Show the remote';
+        toggle.setAttribute('aria-label', toggle.title);
+      }
+    }
+    if (handset && !document.getElementById('handset-toggle')) {
+      const toggle = el('button', { type: 'button', id: 'handset-toggle', class: 'hamburger', text: '☰' });
+      toggle.addEventListener('click', () => {
+        try { localStorage.setItem(HANDSET_KEY, handsetShown() ? 'off' : 'on'); } catch (e) { /* fine */ }
+        placeHandset();
+        if (handsetShown() && !WIDE.matches) select('handset');
+      });
+      const bar = document.querySelector('.topbar');
+      if (bar) bar.prepend(toggle);
     }
 
     let saved = null;

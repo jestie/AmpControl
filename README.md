@@ -88,7 +88,9 @@ the real music.
 - **HTTPS built in**: `npm run cert` creates a local certificate authority and
   a certificate; with `TLS_CERT`/`TLS_KEY` set, the app serves HTTPS
   (`HTTPS_PORT`, default 8443), plain HTTP only redirects, cookies are Secure
-  and HSTS is on. Trust `data/tls/ca.crt` once per device (Help explains how).
+  and HSTS is on. Trust `data/tls/ca.crt` once per device: **[docs/HTTPS.md](docs/HTTPS.md)**
+  walks through creating the certificate and trusting it on Windows, macOS,
+  Linux, iPhone/iPad, Android and Firefox.
 - **Roles**: admins manage account-level settings (Spotify, HEOS account,
   names); regular users (`npm run user:create -- NAME --user`) control the amp,
   radio and clock.
@@ -122,8 +124,9 @@ cp config/devices.json.example config/devices.json
 # edit config/devices.json: set your amp's IP address
 
 npm run user:create        # first account (admin); the password is not echoed
-npm run cert               # optional but recommended: local HTTPS certificate
+npm run cert               # recommended: your own local HTTPS certificate (see docs/HTTPS.md)
 # then add to .env: TLS_CERT=./data/tls/server.crt TLS_KEY=./data/tls/server.key HTTPS_PORT=8443
+# and trust data/tls/ca.crt on your devices (step-by-step for each OS in docs/HTTPS.md)
 npm test                   # no hardware needed
 npm start
 ```

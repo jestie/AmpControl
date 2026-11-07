@@ -126,7 +126,7 @@
         'iPhone/iPad: open ca.crt, install the profile, then Settings → General → About → Certificate Trust Settings → switch it on.',
         'Android: Settings → Security → Encryption & credentials → Install a certificate → CA certificate.'
       ]],
-      ['tip', 'With HTTPS on, the microphone mode works on phones too.'],
+      ['tip', 'With HTTPS on, the microphone mode works on phones too. Full guide for every device type: docs/HTTPS.md in the project.'],
       ['warn', 'Keep SoundControl on your home network. Never expose its port to the internet.']
     ] },
     { id: 'trouble', icon: '🛠', title: 'Troubleshooting', body: [

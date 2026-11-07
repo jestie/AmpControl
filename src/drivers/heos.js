@@ -310,7 +310,7 @@ class HEOSDriver extends BaseDriver {
       const state = await this.getPlayState().catch(() => 'unknown');
       if (state === 'play' || state === 'pause') return true;
     }
-    throw new Error('HEOS accepted the stream URL but did not start playback: check that the amp is online and signed in to HEOS');
+    throw new Error('The amp did not start playback: the address must be a direct audio stream (for example ending in .mp3 or .aac), and the amp must be online');
   }
 
   async playPreset(preset) {

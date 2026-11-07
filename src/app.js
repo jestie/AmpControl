@@ -5,6 +5,7 @@ const express = require('express');
 const session = require('express-session');
 const helmet = require('helmet');
 const createApiRouter = require('./routes/api');
+const { Spotify } = require('./spotify');
 const { verifyUser } = require('./auth/users');
 const { tokenFor, csrfProtection } = require('./auth/csrf');
 const { LoginLimiter } = require('./auth/limit');
@@ -33,7 +34,7 @@ function sessionSecret() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-function createApp({ manager = require('./manager'), logger = require('./utils/logger'), limiter, scheduler = null } = {}) {
+function createApp({ manager = require('./manager'), logger = require('./utils/logger'), limiter, scheduler = null, spotify = new Spotify({ logger, port: parseInt(process.env.PORT, 10) || 8095 }) } = {}) {
   const app = express();
   const pageTemplate = fs.readFileSync(path.join(VIEWS, 'index.html'), 'utf8');
   const loginTemplate = fs.readFileSync(path.join(VIEWS, 'login.html'), 'utf8');
@@ -164,11 +165,40 @@ function createApp({ manager = require('./manager'), logger = require('./utils/l
     res.set('Cache-Control', 'no-store').type('html').send(html);
   });
 
+  // ---- Spotify sign-in (PKCE). Done once, from the server's own browser. ----
+  app.get('/spotify/login', requireAuth, (req, res) => {
+    try {
+      const { url, verifier, state } = spotify.beginLogin();
+      req.session.spotifyLogin = { verifier, state, at: Date.now() };
+      req.session.save(() => res.redirect(url));
+    } catch (e) {
+      res.redirect(`/?spotify=${encodeURIComponent(e.message)}`);
+    }
+  });
+
+  app.get('/spotify/callback', requireAuth, async (req, res) => {
+    const pending = req.session.spotifyLogin;
+    delete req.session.spotifyLogin;
+    const state = typeof req.query.state === 'string' ? req.query.state : '';
+    const code = typeof req.query.code === 'string' ? req.query.code : '';
+    if (!pending || !state || state !== pending.state || Date.now() - pending.at > 10 * 60 * 1000) {
+      return res.redirect('/?spotify=' + encodeURIComponent('Spotify sign-in expired or did not match; try Connect again'));
+    }
+    if (!code) return res.redirect('/?spotify=' + encodeURIComponent(`Spotify sign-in cancelled${req.query.error ? `: ${String(req.query.error).slice(0, 60)}` : ''}`));
+    try {
+      await spotify.finishLogin(code, pending.verifier);
+      logger.info({ action: 'spotify_connected', user: req.session.username });
+      return res.redirect('/?spotify=connected');
+    } catch (e) {
+      return res.redirect(`/?spotify=${encodeURIComponent(e.message)}`);
+    }
+  });
+
   app.get('/healthz', (req, res) => {
     res.json({ ok: true });
   });
 
-  app.use('/api', createApiRouter({ manager, logger, scheduler }));
+  app.use('/api', createApiRouter({ manager, logger, scheduler, spotify }));
 
   app.use((req, res) => {
     if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'not found' });

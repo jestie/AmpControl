@@ -42,6 +42,11 @@ the real music.
   happened; menu keys the amp cannot confirm say so.
 - **Internet radio**: browse and search TuneIn through HEOS (local radio,
   genres, news, sports, podcasts), with station logos and one-tap play.
+- **Spotify** (Premium): paste a playlist, album or track link, or pick one of
+  your playlists, and play it on any Spotify Connect speaker such as the amp.
+  Bring your own free Client ID from developer.spotify.com (Settings → Spotify
+  shows the steps). Sign-in uses PKCE: no client secret or Spotify password is
+  stored, and tokens never leave the server (`data/spotify.json`).
 - **HEOS account**: sign the amp in from the app to unlock radio and favourites.
   The password goes straight to the amp and is never stored by this app.
 - **Sound visualiser**: animated waves that follow the amp's state, or listen
@@ -203,6 +208,7 @@ src/auth/           users (bcrypt), csrf, login limiter
 public/             app.js, faces.js, webradio.js, faceplate.js, handset.js,
                     visualizer.js, clock.js, app.css
 src/webradio.js     Radio Browser search + safe stream pass-through
+src/spotify.js      Spotify sign-in (PKCE) and playback via the Web API
 views/              login + app shell
 tests/              node:test suite
 config/             devices.json.example

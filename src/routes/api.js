@@ -10,7 +10,7 @@ function wrap(handler) {
   return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 }
 
-function createApiRouter({ manager, logger, scheduler = null, webradio = new WebRadio({ logger }) }) {
+function createApiRouter({ manager, logger, scheduler = null, webradio = new WebRadio({ logger }), spotify = null }) {
   const router = express.Router();
 
   function requireAuth(req, res, next) {
@@ -173,6 +173,43 @@ function createApiRouter({ manager, logger, scheduler = null, webradio = new Web
     const account = await driver.signOut();
     logger.info({ action: 'heos_sign_out', device: req.params.id, user: req.session.username });
     res.json({ ok: true, ...account });
+  }));
+
+  // ---- Spotify (Web API; tokens never leave the server) ----
+  function withSpotify(handler) {
+    return wrap(async (req, res) => {
+      if (!spotify) return res.status(503).json({ error: 'Spotify is not available' });
+      try {
+        await handler(req, res);
+      } catch (e) {
+        return res.status(400).json({ error: e.message });
+      }
+      return undefined;
+    });
+  }
+  router.get('/spotify/status', withSpotify(async (req, res) => res.json(await spotify.status())));
+  router.post('/spotify/client', withSpotify(async (req, res) => {
+    spotify.setClientId((req.body || {}).clientId);
+    logger.info({ action: 'spotify_client_set', user: req.session.username });
+    res.json(await spotify.status());
+  }));
+  router.post('/spotify/disconnect', withSpotify(async (req, res) => {
+    spotify.disconnect();
+    logger.info({ action: 'spotify_disconnected', user: req.session.username });
+    res.json({ ok: true });
+  }));
+  router.get('/spotify/devices', withSpotify(async (req, res) => res.json(await spotify.devices())));
+  router.get('/spotify/playlists', withSpotify(async (req, res) => res.json(await spotify.playlists())));
+  router.get('/spotify/now', withSpotify(async (req, res) => res.json(await spotify.nowPlaying())));
+  router.post('/spotify/play', withSpotify(async (req, res) => {
+    const { link, deviceId } = req.body || {};
+    const target = await spotify.play(link, deviceId || null);
+    logger.info({ action: 'spotify_play', kind: target.kind, user: req.session.username });
+    res.json({ ok: true, kind: target.kind });
+  }));
+  router.post('/spotify/control', withSpotify(async (req, res) => {
+    await spotify.control((req.body || {}).action);
+    res.json({ ok: true });
   }));
 
   // ---- Browser radio (Radio Browser directory; plays in the page) ----

@@ -111,7 +111,7 @@
       refs.presets
     ]);
 
-    refs.streamInput = el('input', { type: 'url', placeholder: 'https://stream.example/radio.mp3', 'aria-label': 'Stream URL' });
+    refs.streamInput = el('input', { type: 'url', placeholder: 'Direct audio stream, e.g. https://…/radio.mp3', 'aria-label': 'Stream URL' });
     refs.streamButton = el('button', { type: 'submit', text: 'Play' });
     refs.streamForm = el('form', { class: 'stream section', hidden: 'hidden' }, [
       refs.streamInput,
@@ -602,6 +602,14 @@
     });
 
     const deck = el('div', { class: 'deck' }, [bar, panels.remote, panels.handset, panels.radio, panels.clock, panels.settings, refs.note]);
+
+    // Spotify: setup in Settings, playing in the Radio tab (one panel per page).
+    if (window.SpotifyPanel && !window.__soundcontrolSpotify) {
+      window.__soundcontrolSpotify = true;
+      card.spotify = window.SpotifyPanel.create({ api, toast, deviceName: device.name });
+      panels.radio.prepend(card.spotify.player);
+      faceSection.after(card.spotify.setup);
+    }
 
     // A virtual amp plays internet radio in the page itself.
     if (device.virtual && window.WebRadioPanel) {

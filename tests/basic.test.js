@@ -73,6 +73,13 @@ test('clampVolume keeps levels inside the per-device cap', () => {
   assert.throws(() => clampVolume(NaN, 40), /number/);
 });
 
+test('stream URL box explains music-service links instead of failing', () => {
+  assert.throws(() => validateStreamUrl('https://open.spotify.com/playlist/abc'), /Spotify Connect/);
+  assert.throws(() => validateStreamUrl('https://youtu.be/abc'), /YouTube/);
+  assert.throws(() => validateStreamUrl('https://music.apple.com/gb/album/x'), /AirPlay/);
+  assert.equal(validateStreamUrl('https://stream.example.org/radio.mp3'), 'https://stream.example.org/radio.mp3');
+});
+
 test('validateStreamUrl only accepts http and https', () => {
   assert.equal(validateStreamUrl('http://stream.example/radio.mp3'), 'http://stream.example/radio.mp3');
   assert.match(validateStreamUrl('https://stream.example/a'), /^https:\/\/stream\.example\/a$/);
@@ -365,6 +372,53 @@ test('virtual amp keeps state and is the default without a config', async () => 
   } finally {
     if (saved === undefined) delete process.env.DEVICES_CONFIG; else process.env.DEVICES_CONFIG = saved;
   }
+});
+
+test('spotify: links, PKCE sign-in, token refresh, tokens never leave the server', async () => {
+  const os = require('os');
+  const { Spotify, parseLink } = require('../src/spotify');
+  assert.deepEqual(parseLink('https://open.spotify.com/playlist/2Ps64TVbfmfX6jxWJnlX1j?si=abc').body, { context_uri: 'spotify:playlist:2Ps64TVbfmfX6jxWJnlX1j' });
+  assert.deepEqual(parseLink('https://open.spotify.com/intl-de/track/4uLU6hMCjMI75M1A2tKUQC').body, { uris: ['spotify:track:4uLU6hMCjMI75M1A2tKUQC'] });
+  assert.deepEqual(parseLink('spotify:album:1DFixLWuPkv3KT3TnV35m3').body, { context_uri: 'spotify:album:1DFixLWuPkv3KT3TnV35m3' });
+  assert.throws(() => parseLink('https://evil.example/playlist/2Ps64TVbfmfX6jxWJnlX1j'), /not a Spotify link/);
+  assert.throws(() => parseLink('https://open.spotify.com/user/someone'), /playlist, album or track/);
+
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sc-spot-')), 'spotify.json');
+  const calls = [];
+  let tokenCount = 0;
+  const fetchImpl = async (url, opts = {}) => {
+    calls.push({ url, opts });
+    if (url.endsWith('/api/token')) {
+      tokenCount += 1;
+      const form = new URLSearchParams(opts.body);
+      assert.ok(!form.has('client_secret'), 'PKCE: no client secret');
+      if (form.get('grant_type') === 'authorization_code') assert.ok(form.get('code_verifier').length >= 43);
+      return { ok: true, status: 200, json: async () => ({ access_token: `at${tokenCount}`, refresh_token: 'rt', expires_in: tokenCount === 1 ? 0 : 3600 }) };
+    }
+    if (url.includes('/me/player/play')) return { ok: true, status: 204, json: async () => null };
+    if (url.endsWith('/me')) return { ok: true, status: 200, json: async () => ({ display_name: 'Tester', product: 'premium' }) };
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+  const sp = new Spotify({ file, fetchImpl, port: 8095 });
+  assert.throws(() => sp.setClientId('nope'), /32 letters/);
+  sp.setClientId('0123456789abcdef0123456789abcdef');
+  const login = sp.beginLogin();
+  const auth = new URL(login.url);
+  assert.equal(auth.searchParams.get('code_challenge_method'), 'S256');
+  assert.equal(auth.searchParams.get('redirect_uri'), 'http://127.0.0.1:8095/spotify/callback');
+  assert.equal(auth.searchParams.get('state'), login.state);
+  await sp.finishLogin('code123', login.verifier);
+  // The first token was already expired: the next call refreshes it.
+  await sp.play('https://open.spotify.com/playlist/2Ps64TVbfmfX6jxWJnlX1j', 'abcdef0123456789');
+  assert.equal(tokenCount, 2, 'refreshed before the API call');
+  const play = calls.find((c) => c.url.includes('/me/player/play'));
+  assert.equal(play.opts.headers.Authorization, 'Bearer at2');
+  assert.equal(play.opts.method, 'PUT');
+  await assert.rejects(() => sp.play('spotify:playlist:2Ps64TVbfmfX6jxWJnlX1j', 'bad id!'), /invalid speaker/);
+  const status = await sp.status();
+  assert.equal(status.premium, true);
+  assert.ok(!JSON.stringify(status).includes('at2') && !JSON.stringify(status).includes('rt'), 'status never contains tokens');
+  assert.equal((fs.statSync(file).mode & 0o777).toString(8), '600');
 });
 
 test('heos playStream and playPreset fail clearly when HEOS cannot play', async () => {

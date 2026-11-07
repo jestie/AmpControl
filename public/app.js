@@ -503,6 +503,18 @@
 
     const stage = el('div', { class: 'stage' }, [head, card.faceplate && card.faceplate.root, card.faces && card.faces.root, card.visualizer && card.visualizer.root]);
 
+    // ---- speakers either side of the front panel ----
+    if (window.Speakers && (card.faceplate || card.faces)) {
+      card.speakers = window.Speakers.create({
+        levels: () => (card.visualizer ? card.visualizer.levels() : null),
+        getState: () => card.data,
+        cap: Number(device.volumeCap) || 40
+      });
+      (card.faceplate ? card.faceplate.root : card.faces.root).before(card.speakers.row);
+      if (card.faceplate) card.speakers.middle.append(card.faceplate.root);
+      if (card.faces) card.speakers.middle.append(card.faces.root);
+    }
+
     // ---- editable heading ----
     const nameEl = head.querySelector('h2');
     const roomEl = head.querySelector('.room');

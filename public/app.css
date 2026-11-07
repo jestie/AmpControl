@@ -791,3 +791,99 @@ a.button.primary { background: var(--accent); color: #fff; }
 .spotify .spotify-play { margin-bottom: 0.4rem; }
 .spotify details summary { cursor: pointer; color: var(--accent); font-size: 0.88rem; margin: 0.4rem 0; }
 .spotify-lists { max-height: 300px; }
+
+/* =====================================================================
+   Speakers either side of the amp (our own design, drawn in CSS)
+   ===================================================================== */
+.amp-row { display: flex; align-items: center; gap: 0; container-type: inline-size; margin-bottom: 0.2rem; }
+.amp-middle { flex: 1; min-width: 0; }
+.amp-middle > .faceplate, .amp-middle > .dface { margin-top: 0.25rem; margin-bottom: 0.9rem; }
+.spk-tab { flex: none; align-self: stretch; width: 18px; min-height: 0; padding: 0; margin: 0.25rem 0 0.9rem;
+  border-radius: 8px; font-size: 0.8rem; line-height: 1; color: var(--muted);
+  background: var(--card-soft); border: 1px solid var(--border); writing-mode: horizontal-tb; }
+.spk-tab:hover, .spk-tab[aria-pressed="true"] { color: var(--text); border-color: var(--accent); }
+.spk-tab-left { margin-right: 6px; }
+.spk-tab-right { margin-left: 6px; }
+
+.speaker { flex: none; width: 0; opacity: 0; overflow: hidden; padding: 0; min-height: 0; border: 0; background: none;
+  aspect-ratio: 0.62 / 1; cursor: pointer; transition: width 0.45s ease, opacity 0.35s ease, margin 0.45s ease; }
+.speakers-out .speaker { width: 14.5cqw; opacity: 1; }
+.speakers-out .speaker-left { margin-right: 1.6cqw; }
+.speakers-out .speaker-right { margin-left: 1.6cqw; }
+.speaker:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.spk-cabinet {   /* warm wood, seen from the front: a thin edge round the baffle */
+  position: relative; width: 100%; height: 100%; border-radius: 7% / 4.5%; padding: 3.5%;
+  background:
+    repeating-linear-gradient(97deg, rgba(60, 20, 5, 0.18) 0 1px, transparent 1px 5px),
+    repeating-linear-gradient(83deg, rgba(255, 190, 140, 0.08) 0 2px, transparent 2px 9px),
+    linear-gradient(160deg, #b5532a, #8a3416 55%, #6f2810);
+  box-shadow: 0 0.9cqw 2cqw rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+.spk-baffle { position: relative; width: 100%; height: 100%; border-radius: 6% / 4%;
+  background:
+    radial-gradient(circle at 50% 50%, #2b2b2b 0 32%, transparent 36%) 0 0 / 0.75cqw 0.75cqw,
+    #141414;
+  box-shadow: inset 0 0 1.2cqw rgba(0, 0, 0, 0.8); }
+.spk-badge { position: absolute; top: 4.5%; left: 50%; translate: -50% 0; font: 700 1.05cqw/1 system-ui, sans-serif; letter-spacing: 0.1cqw; color: #d9d9d9; }
+.spk-tweeter { position: absolute; left: 50%; top: 23%; width: 52%; aspect-ratio: 1.35 / 1; translate: -50% -50%; }
+.spk-tweeter-plate { position: absolute; inset: 0; border-radius: 34%; background: radial-gradient(ellipse at 50% 40%, #232323, #0b0b0b 70%);
+  box-shadow: 0 0.2cqw 0.4cqw rgba(0, 0, 0, 0.7), inset 0 0 0 1px #000; display: grid; place-items: center; }
+.spk-dome { width: 42%; aspect-ratio: 1; border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #ffffff, #bfc3c7 30%, #6d7176 70%, #2d2f31);
+  box-shadow: 0 0 0 0.35cqw #1a1a1a, 0 0 0 0.5cqw #3a3a3a; will-change: scale; }
+.spk-woofer { position: absolute; left: 50%; top: 64%; width: 86%; aspect-ratio: 1; translate: -50% -50%; border-radius: 50%;
+  background: radial-gradient(circle, #2a2a2a 62%, #4a4a4a 66%, #1c1c1c 70%);
+  box-shadow: 0 0.25cqw 0.5cqw rgba(0, 0, 0, 0.7); }
+.spk-woofer::before {   /* the frame's screws */
+  content: ""; position: absolute; inset: 4%; border-radius: 50%;
+  background: radial-gradient(circle at 50% 2%, #777 0 1.6%, transparent 2%), radial-gradient(circle at 50% 98%, #777 0 1.6%, transparent 2%),
+              radial-gradient(circle at 2% 50%, #777 0 1.6%, transparent 2%), radial-gradient(circle at 98% 50%, #777 0 1.6%, transparent 2%); }
+.spk-surround { position: absolute; inset: 13%; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle, #111 70%, #3b3b3b 78%, #0d0d0d 86%); }
+.spk-cone { position: relative; width: 78%; aspect-ratio: 1; border-radius: 50%; will-change: scale;
+  background:
+    repeating-conic-gradient(from 0deg, rgba(120, 90, 10, 0.18) 0 3deg, transparent 3deg 6deg),
+    repeating-radial-gradient(circle, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 3px),
+    radial-gradient(circle at 45% 40%, #f3d46a, #c9a33a 55%, #8f7120);
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.35); }
+.spk-plug { position: absolute; left: 50%; top: 50%; width: 30%; aspect-ratio: 1; translate: -50% -50%; border-radius: 50%; will-change: scale;
+  background: radial-gradient(circle at 38% 30%, #ffffff, #b9bdc2 35%, #5c6064 80%);
+  box-shadow: 0 0.3cqw 0.6cqw rgba(0, 0, 0, 0.6); }
+.spk-port { position: absolute; left: 12%; top: 6%; width: 7%; aspect-ratio: 1; border-radius: 50%; background: #000; box-shadow: inset 0 0 0 0.2cqw #262626; }
+
+.spk-grille {   /* black fabric that comes off with a tap */
+  position: absolute; inset: 2.5%; border-radius: 7% / 4.5%;
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 2px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 2px),
+    radial-gradient(ellipse at 50% 30%, #2a2a2c, #121214 75%);
+  box-shadow: inset 0 0 1.4cqw rgba(0, 0, 0, 0.9), 0 0.3cqw 0.6cqw rgba(0, 0, 0, 0.5);
+  transition: translate 0.5s cubic-bezier(.5, -0.3, .4, 1.2), opacity 0.4s ease, rotate 0.5s ease;
+}
+.spk-grille-badge { position: absolute; bottom: 4%; left: 50%; translate: -50% 0; font: 600 0.9cqw/1 system-ui, sans-serif; letter-spacing: 0.08cqw; color: #9a9a9a; white-space: nowrap; }
+.grilles-off .spk-grille { translate: 0 108%; opacity: 0; rotate: 4deg; pointer-events: none; }
+.speaker-right .spk-grille { transition-delay: 0.08s; }
+@media (prefers-reduced-motion: reduce) { .speaker, .spk-grille { transition: none; } }
+@media (max-width: 999px) { .spk-tab { width: 16px; } }
+
+/* ---- Translucent "glass" for the accent buttons (follows the theme colour) ---- */
+button.primary, a.button.primary, .tab.active, .hamburger[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  color: color-mix(in srgb, var(--accent) 35%, #ffffff);
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
+  backdrop-filter: blur(8px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 14px color-mix(in srgb, var(--accent) 22%, transparent);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+button.primary:hover, a.button.primary:hover, .tab.active:hover {
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+  filter: none;
+}
+button.primary:disabled { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.day input:checked + span {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  color: color-mix(in srgb, var(--accent) 35%, #ffffff);
+}

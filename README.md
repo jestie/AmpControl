@@ -33,6 +33,9 @@ the real music.
   page. The server passes the stream through so the visualiser can analyse the
   real audio; it only streams stations from the directory and refuses any
   private or local network address.
+- **Speakers**: tap the side tabs to slide a pair of bookshelf speakers out
+  beside the amp; tap one to take its grille off. The cones punch out on the
+  beat and the tweeters flick on cymbals, more as the volume goes up.
 - **Name it yourself**: tap ✎ to rename a device and its room line.
 - **Interactive front panel** (optional, needs photos, see below): turn the
   real volume knob, click through inputs with the input knob, press power and

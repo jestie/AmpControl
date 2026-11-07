@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="csrf-token" content="{{CSRF_TOKEN}}">
+  <meta name="theme-color" content="#121417">
+  <title>SoundControl</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/faceplate.js" defer></script>
+  <script src="/visualizer.js" defer></script>
+  <script src="/handset.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>SoundControl</h1>
+      <span class="muted">signed in as {{USERNAME}}</span>
+    </div>
+    <button type="button" class="ghost" id="logout">Log out</button>
+  </header>
+
+  <main id="devices" aria-live="polite">
+    <p class="muted">Loading devices…</p>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

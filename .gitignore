@@ -1,0 +1,22 @@
+node_modules/
+.env
+*.pid
+logs/*.log
+data/users.json
+data/*.tmp
+npm-debug.log*
+.DS_Store
+opencode-run*.log
+.session/
+
+# Private: never published
+BRIEF.md
+brief/
+RECOMMENDATIONS.md
+config/devices.json
+
+# The maker's product photos are not ours to publish; see public/img/README.md
+public/img/*.png
+public/img/*.jpg
+public/img/*.jpeg
+public/img/*.webp

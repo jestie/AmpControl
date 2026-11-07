@@ -1,0 +1,32 @@
+[
+  {
+    "id": "living-room-amp",
+    "name": "Living room amp",
+    "room": "Living room",
+    "enabled": true,
+    "type": "heos",
+    "host": "192.0.2.10",
+    "port": 1255,
+    "volumeCap": 40,
+    "faceplate": "pm7000n",
+    "drivers": ["heos", "denon_avr"],
+    "denon_avr": {
+      "host": "192.0.2.10",
+      "port": 23,
+      "volumeMax": 100,
+      "inputs": [
+        { "id": "ANALOG1", "label": "Analog 1 (AUX)" },
+        { "id": "BT", "label": "Bluetooth" }
+      ]
+    },
+    "presets": [
+      { "id": 1, "label": "Preset 1" },
+      { "id": 2, "label": "Preset 2" },
+      { "id": 3, "label": "Preset 3" },
+      { "id": 4, "label": "Preset 4" },
+      { "id": 5, "label": "Preset 5" },
+      { "id": 6, "label": "Preset 6" }
+    ],
+    "note": "Replace 192.0.2.10 (a documentation address) with your amp's IP. Only list inputs your amp accepts: sources switched off in the amp's setup are ignored."
+  }
+]

@@ -39,8 +39,14 @@ function validateCredentials(username, password) {
   }
 }
 
-async function createUser(username, password) {
+const ROLES = ['admin', 'user'];
+
+// Accounts made before roles existed were the owner's: they count as admins.
+const roleOf = (user) => (user && ROLES.includes(user.role) ? user.role : 'admin');
+
+async function createUser(username, password, role = 'admin') {
   validateCredentials(username, password);
+  if (!ROLES.includes(role)) throw new Error('role must be admin or user');
   const users = loadUsers();
   if (users.some((user) => user.username.toLowerCase() === username.toLowerCase())) {
     throw new Error('user already exists');
@@ -50,11 +56,12 @@ async function createUser(username, password) {
     id: Date.now().toString(),
     username,
     passwordHash,
+    role,
     createdAt: new Date().toISOString()
   };
   users.push(user);
   saveUsers(users);
-  return { id: user.id, username: user.username, createdAt: user.createdAt };
+  return { id: user.id, username: user.username, role: user.role, createdAt: user.createdAt };
 }
 
 async function verifyUser(username, password) {
@@ -64,7 +71,7 @@ async function verifyUser(username, password) {
   const hash = user ? user.passwordHash : DUMMY_HASH;
   const ok = await bcrypt.compare(password, hash);
   if (!user || !ok) return null;
-  return { id: user.id, username: user.username };
+  return { id: user.id, username: user.username, role: roleOf(user) };
 }
 
-module.exports = { loadUsers, createUser, verifyUser, validateCredentials };
+module.exports = { loadUsers, createUser, verifyUser, validateCredentials, roleOf, ROLES };

@@ -1,4 +1,5 @@
 const BaseDriver = require('./base');
+const { publicError } = require('./errors');
 
 /**
  * One logical device, several protocol drivers.
@@ -60,10 +61,14 @@ class CompositeDriver extends BaseDriver {
       try {
         return await entry.driver[method](...args);
       } catch (e) {
-        failures.push(`${entry.type}: ${e.message}`);
+        failures.push({ type: entry.type, error: e });
       }
     }
-    throw new Error(failures.join('; ') || `${method} failed`);
+    // Users see a plain message; the original (with addresses) stays in .cause for the log.
+    const shown = failures.map((f) => `${f.type}: ${publicError(f.error).message}`).join('; ') || `${method} failed`;
+    const err = new Error(shown);
+    err.cause = failures.length ? failures.map((f) => `${f.type}: ${f.error.message}`).join('; ') : undefined;
+    throw err;
   }
 
   async _read(capability, method) {

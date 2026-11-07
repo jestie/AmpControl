@@ -4,6 +4,7 @@ const { csrfProtection } = require('../auth/csrf');
 const { isRemoteKey, pressRemoteKey } = require('../remote');
 const { WebRadio } = require('../webradio');
 const { versionInfo } = require('../version');
+const { publicError } = require('../drivers/errors');
 
 const PLAY_STATES = new Set(['play', 'pause', 'stop']);
 
@@ -35,6 +36,13 @@ function createApiRouter({ manager, logger, scheduler = null, webradio = new Web
   router.use(requireAuth);
   router.use(csrfProtection);
 
+  // Account-level settings (Spotify, HEOS account, names) are for admins (SC-04).
+  // A session without a role (from before roles existed) is treated as a plain user.
+  function requireAdmin(req, res, next) {
+    if (req.session && req.session.role === 'admin') return next();
+    return res.status(403).json({ error: 'only an admin can change this' });
+  }
+
   router.get('/devices', (req, res) => {
     // Whitelist the public fields: never leak addresses or credentials.
     const devices = manager.getDevices().map((device) => ({
@@ -49,7 +57,7 @@ function createApiRouter({ manager, logger, scheduler = null, webradio = new Web
     res.json(devices);
   });
 
-  router.post('/devices/:id/label', wrap(async (req, res) => {
+  router.post('/devices/:id/label', requireAdmin, wrap(async (req, res) => {
     if (!manager.getDevice(req.params.id)) return res.status(404).json({ error: 'device not found' });
     if (typeof manager.setLabel !== 'function') return badRequest(res, 'renaming is not supported');
     try {
@@ -66,7 +74,7 @@ function createApiRouter({ manager, logger, scheduler = null, webradio = new Web
   router.get('/version', (req, res) => res.json(VERSION));
 
   router.get('/session', (req, res) => {
-    res.json({ user: req.session.username });
+    res.json({ user: req.session.username, role: req.session.role === 'admin' ? 'admin' : 'user' });
   });
 
   router.get('/devices/:id/status', wrap(async (req, res) => {
@@ -150,7 +158,7 @@ function createApiRouter({ manager, logger, scheduler = null, webradio = new Web
     res.json(account);
   }));
 
-  router.post('/devices/:id/account/signin', wrap(async (req, res) => {
+  router.post('/devices/:id/account/signin', requireAdmin, wrap(async (req, res) => {
     const driver = device(req, res);
     if (!driver) return;
     if (typeof driver.signIn !== 'function') return badRequest(res, 'this device has no HEOS account');
@@ -171,7 +179,7 @@ function createApiRouter({ manager, logger, scheduler = null, webradio = new Web
     }
   }));
 
-  router.post('/devices/:id/account/signout', wrap(async (req, res) => {
+  router.post('/devices/:id/account/signout', requireAdmin, wrap(async (req, res) => {
     const driver = device(req, res);
     if (!driver) return;
     if (typeof driver.signOut !== 'function') return badRequest(res, 'this device has no HEOS account');
@@ -193,12 +201,12 @@ function createApiRouter({ manager, logger, scheduler = null, webradio = new Web
     });
   }
   router.get('/spotify/status', withSpotify(async (req, res) => res.json(await spotify.status())));
-  router.post('/spotify/client', withSpotify(async (req, res) => {
+  router.post('/spotify/client', requireAdmin, withSpotify(async (req, res) => {
     spotify.setClientId((req.body || {}).clientId);
     logger.info({ action: 'spotify_client_set', user: req.session.username });
     res.json(await spotify.status());
   }));
-  router.post('/spotify/disconnect', withSpotify(async (req, res) => {
+  router.post('/spotify/disconnect', requireAdmin, withSpotify(async (req, res) => {
     spotify.disconnect();
     logger.info({ action: 'spotify_disconnected', user: req.session.username });
     res.json({ ok: true });
@@ -339,8 +347,8 @@ function createApiRouter({ manager, logger, scheduler = null, webradio = new Web
       logger.info({ action: 'remote', device: req.params.id, key, verified: result.verified, user: req.session.username });
       res.json(result);
     } catch (e) {
-      logger.info({ action: 'remote', device: req.params.id, key, result: 'failed', user: req.session.username });
-      res.status(400).json({ error: e.message });
+      logger.info({ action: 'remote', device: req.params.id, key, result: 'failed', error: e.message, user: req.session.username });
+      res.status(400).json({ error: publicError(e).message });
     }
   }));
 

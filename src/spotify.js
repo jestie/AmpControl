@@ -51,11 +51,11 @@ function parseLink(input) {
 }
 
 class Spotify {
-  constructor({ file, logger, fetchImpl = globalThis.fetch, port = 8095 } = {}) {
+  constructor({ file, logger, fetchImpl = globalThis.fetch, port = 8095, https = false } = {}) {
     this.file = file || process.env.SPOTIFY_FILE || path.join(__dirname, '../data/spotify.json');
     this.logger = logger || { info() {}, error() {} };
     this.fetch = fetchImpl;
-    this.redirectUri = process.env.SPOTIFY_REDIRECT_URI || `http://127.0.0.1:${port}/spotify/callback`;
+    this.redirectUri = process.env.SPOTIFY_REDIRECT_URI || `${https ? 'https' : 'http'}://127.0.0.1:${port}/spotify/callback`;
     this.data = {};
     this.load();
   }

@@ -21,6 +21,10 @@ const USER_AGENT = 'SoundControl/1.0 (+https://github.com/jestie/AmpControl)';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const GENRES = ['pop', 'rock', 'jazz', 'classical', 'dance', 'chillout', 'lounge', 'ambient', 'electronic', 'hip hop', 'soul', 'blues', 'country', 'reggae', 'metal', 'news', '80s', '90s'];
 const MAX_STREAMS = 4;
+// Re-binding attacks need a near-zero DNS lifetime every time. Caching resolvers
+// report the time LEFT, which can briefly be ~0 for any name, so ask twice.
+const MIN_AMP_DNS_TTL = 5;     // seconds
+const DNS_RECHECK_MS = 2000;
 
 // Names people type that stations do not use. Lower case.
 const ALIASES = {
@@ -105,6 +109,7 @@ class WebRadio {
     this.fetchJson = fetchJson;
     this.logger = logger || { info() {}, error() {} };
     this.known = new Map();     // uuid -> station (only these can be streamed)
+    this.dnsRecheckMs = DNS_RECHECK_MS;
     this.active = 0;
   }
 
@@ -176,13 +181,35 @@ class WebRadio {
     return merged.slice(0, 60);
   }
 
-  /** A station's stream address for the amp to play, checked like our own streams. */
-  async publicStreamUrl(uuid) {
+  /**
+   * A station's stream address for the amp to play. The amp resolves the name
+   * itself after our check, so a name with a near-zero DNS lifetime could be
+   * switched to a home-network address in between (DNS re-binding, SC-07).
+   * Refuse private answers and very short lifetimes.
+   */
+  async publicStreamUrl(uuid, resolver = dns.promises) {
     const station = await this.station(uuid);
     const target = new URL(station.url);
     const host = target.hostname.replace(/^\[|\]$/g, '');
-    const addresses = net.isIP(host) ? [{ address: host }] : await dns.promises.lookup(host, { all: true });
-    if (!addresses.length || addresses.some((a) => isPrivateAddress(a.address))) throw new Error('blocked: private network address');
+    if (net.isIP(host)) {
+      if (isPrivateAddress(host)) throw new Error('blocked: private network address');
+      return { url: station.url, name: station.name };
+    }
+    const lookup = async () => {
+      const answers = [];
+      for (const kind of ['resolve4', 'resolve6']) {
+        try { answers.push(...await resolver[kind](host, { ttl: true })); } catch (e) { /* no records of this kind */ }
+      }
+      if (!answers.length) throw new Error('the station address could not be found');
+      if (answers.some((a) => isPrivateAddress(a.address))) throw new Error('blocked: private network address');
+      return Math.min(...answers.map((a) => Number(a.ttl) || 0));
+    };
+    if (await lookup() < MIN_AMP_DNS_TTL) {
+      await new Promise((resolve) => setTimeout(resolve, this.dnsRecheckMs));
+      if (await lookup() < MIN_AMP_DNS_TTL) {
+        throw new Error('this station cannot be sent to the amp safely (its address keeps changing); play it in the browser instead');
+      }
+    }
     return { url: station.url, name: station.name };
   }
 

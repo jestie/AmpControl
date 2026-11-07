@@ -40,7 +40,10 @@ function askLine(question) {
 }
 
 async function main() {
-  const username = (process.argv[2] || await askLine('Username: ')).trim();
+  // npm run user:create -- NAME [--user]   (--user = no account-level settings)
+  const args = process.argv.slice(2);
+  const role = args.includes('--user') ? 'user' : 'admin';
+  const username = (args.find((a) => !a.startsWith('--')) || await askLine('Username: ')).trim();
   const password = await askLine('Password (not echoed, 10+ characters): ');
   const confirm = await askLine('Repeat password: ');
 
@@ -50,7 +53,7 @@ async function main() {
   }
 
   try {
-    const user = await createUser(username, password);
+    const user = await createUser(username, password, role);
     console.log(`User "${user.username}" created.`);
   } catch (e) {
     console.error(`Could not create user: ${e.message}`);

@@ -78,10 +78,18 @@ the real music.
   server maps it from a fixed list. Values passed back to the amp (radio station
   and folder IDs) are validated so they cannot add parameters or commands.
 - The API never returns device addresses or credentials.
-- **Plain HTTP by default. Run it on your home network only and never expose
-  the port to the internet.** Put HTTPS in front of it (a reverse proxy) and
-  set `COOKIE_SECURE=true` if you need more. The amp's own protocols are
-  unencrypted, so the HEOS sign-in crosses your LAN in plain text.
+- **HTTPS built in**: `npm run cert` creates a local certificate authority and
+  a certificate; with `TLS_CERT`/`TLS_KEY` set, the app serves HTTPS
+  (`HTTPS_PORT`, default 8443), plain HTTP only redirects, cookies are Secure
+  and HSTS is on. Trust `data/tls/ca.crt` once per device (Help explains how).
+- **Roles**: admins manage account-level settings (Spotify, HEOS account,
+  names); regular users (`npm run user:create -- NAME --user`) control the amp,
+  radio and clock.
+- Commands sent to the amp are single-line only (no injected extra commands),
+  and error messages never contain device addresses.
+- **Run it on your home network only and never expose the port to the
+  internet.** The amp's own protocols are unencrypted, so the server-to-amp
+  link (including the HEOS sign-in) stays plain on your LAN.
 
 ## Requirements
 
@@ -106,12 +114,14 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 cp config/devices.json.example config/devices.json
 # edit config/devices.json: set your amp's IP address
 
-npm run user:create        # first account; the password is not echoed
+npm run user:create        # first account (admin); the password is not echoed
+npm run cert               # optional but recommended: local HTTPS certificate
+# then add to .env: TLS_CERT=./data/tls/server.crt TLS_KEY=./data/tls/server.key HTTPS_PORT=8443
 npm test                   # no hardware needed
 npm start
 ```
 
-Open `http://<server-ip>:8095` from any device on the same network. The app
+Open `https://<server-ip>:8443` (or `http://<server-ip>:8095` without a certificate) from any device on the same network. The app
 binds `0.0.0.0` by default; set `HOST` to restrict it.
 
 ### Front panel and remote photos

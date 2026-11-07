@@ -1,7 +1,19 @@
 # Changelog
 
 All notable changes to SoundControl. Versions follow [semantic versioning](https://semver.org);
-1.0.0 will follow HTTPS support and the open security fixes.
+1.0.0 will follow wider real-world testing (HTTPS and the first security scan's fixes landed in 0.7.0).
+
+## [0.7.0] - 2026-11-07
+Security release: every finding from the first SAST/DAST scan fixed and retested.
+- HTTPS built in: `npm run cert` makes a local certificate authority and certificate; plain HTTP redirects to HTTPS; Secure session cookie and HSTS
+- Admin and user roles: Spotify setup, the HEOS account and renaming are admin-only (existing accounts stay admin; `npm run user:create -- NAME --user` makes a regular user)
+- Commands to the amp can no longer carry an extra line (HEOS sign-in and both device protocols refuse line breaks)
+- Errors no longer show device addresses ("the amp is not answering"; details stay in the server log)
+- Sessions survive a restart and expired ones are cleaned up (file-based session store)
+- Bad or oversized requests get 400/413 instead of 500
+- Stations are only sent to the amp if their address cannot be switched to a home-network address (DNS re-binding guard)
+- Stricter Content Security Policy (no inline styles)
+- nodemon removed (dev mode uses `node --watch`); npm audit: 0 vulnerabilities
 
 ## [0.6.0] - 2026-11-07
 - Help centre: a Help button in the top bar opens a searchable guide to every feature, troubleshooting and privacy notes

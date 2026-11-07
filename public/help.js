@@ -85,7 +85,7 @@
         'At developer.spotify.com/dashboard, log in with your Premium account and create an app.',
         'Redirect URI: copy it exactly from Settings → Spotify. Tick "Web API" and save.',
         'Copy the Client ID into Settings → Spotify and press Save.',
-        'On the PC running SoundControl, open it at the 127.0.0.1 address shown, then press Connect Spotify (once).',
+        'On the PC running SoundControl, open it at the 127.0.0.1 address shown (https://127.0.0.1:8443 with HTTPS on), then press Connect Spotify (once). Only admins can connect Spotify.',
         'In the Radio tab, paste a playlist, album or track link, choose the speaker and press Play.'
       ]],
       ['warn', '"Web API" greyed out on Spotify\'s site means the account is not Premium (or Spotify has paused app creation).'],
@@ -113,9 +113,17 @@
       ['ul', [
         'Open the same address on your phone while on the same home network, and sign in.',
         'If the server runs inside WSL on Windows, phones need a Windows port proxy and firewall rule before they can reach it.',
-        'Add it to your home screen from the browser menu for an app-like icon.',
-        'The microphone mode and some browser features need HTTPS on phones.'
+        'Add it to your home screen from the browser menu for an app-like icon.'
       ]],
+      ['p', 'HTTPS: SoundControl encrypts the connection with its own certificate. To stop the browser warning, trust the "SoundControl Local CA" once on each device:'],
+      ['steps', [
+        'On the server, run "npm run cert" (add the address phones use, e.g. "npm run cert -- 192.168.1.45"), then restart SoundControl.',
+        'Copy data/tls/ca.crt to the device. Never share data/tls/ca.key.',
+        'Windows: double-click ca.crt → Install Certificate → Current User → "Trusted Root Certification Authorities".',
+        'iPhone/iPad: open ca.crt, install the profile, then Settings → General → About → Certificate Trust Settings → switch it on.',
+        'Android: Settings → Security → Encryption & credentials → Install a certificate → CA certificate.'
+      ]],
+      ['tip', 'With HTTPS on, the microphone mode works on phones too.'],
       ['warn', 'Keep SoundControl on your home network. Never expose its port to the internet.']
     ] },
     { id: 'trouble', icon: '🛠', title: 'Troubleshooting', body: [
@@ -127,7 +135,8 @@
         ['Radio asks me to sign in.', 'Sign the amp in to HEOS in Settings. Without it, TuneIn and favourites are unavailable.'],
         ['A station will not start.', 'Some stations are offline or use formats the amp cannot play. Try another; the open-directory list shows the format and bitrate.'],
         ['No sound from browser radio.', 'Check the virtual amp is on and not muted, and the device volume is up. If the browser blocked autoplay, tap ▶.'],
-        ['Every action fails with 403.', 'The page was open while the server restarted. Reload and sign in again.'],
+        ['Every action fails with 403.', 'The page was open while the server restarted, or the action is admin-only ("only an admin can change this"). Reload, or ask an admin.'],
+        ['The browser warns the connection is not private.', 'Trust the SoundControl Local CA on that device (see "Using it on your phone"), or open it once and choose to continue.'],
         ['The waves do not follow my amp\'s music.', 'The music plays on the amp, not in the app. Use 🎤 for the room sound, or browser radio.'],
         ['Spotify says Premium required.', 'Spotify only allows playback control and developer apps for Premium accounts.']
       ]]
@@ -139,9 +148,12 @@
         'The HEOS password is sent to the amp only. Spotify sign-in stores tokens on the server only, never in the browser.',
         'The microphone mode analyses sound on your device; nothing is recorded or sent.',
         'Browser radio passes through the server only for stations from the open directory, and never to addresses inside your home network.',
-        'The version number is only shown after signing in.'
+        'The version number is only shown after signing in.',
+        'The connection is HTTPS (when set up with npm run cert); plain HTTP only redirects to it. Session cookies are Secure and HSTS is on.',
+        'Admins manage account-level settings (Spotify, HEOS account, names); regular users control the amp, radio and clock.',
+        'Commands to the amp are checked so a field cannot slip in an extra command, and error messages never show device addresses.'
       ]],
-      ['warn', 'Today SoundControl uses plain HTTP on your home network, so traffic is not encrypted. HTTPS is planned before version 1.0.']
+      ['warn', 'The amp\'s own network protocols are not encrypted: the link between the server and the amp (including the HEOS sign-in) stays plain on your home network. Keep the amp and server on a network you trust.']
     ] },
     { id: 'keys', icon: '⌨', title: 'Keyboard shortcuts', body: [
       ['keys', [

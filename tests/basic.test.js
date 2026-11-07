@@ -4,6 +4,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
+// Tests never touch the real data/ files.
+process.env.SESSIONS_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sc-sess-')), 'sessions.json');
+
 const { clampVolume, validateStreamUrl } = require('../src/utils/volume');
 const CompositeDriver = require('../src/drivers/composite');
 const { tokenFor, csrfProtection } = require('../src/auth/csrf');
@@ -430,6 +433,55 @@ test('version: package version and changelog releases are parsed', () => {
   assert.deepEqual(parseChangelog('## [1.2.0] - 2026-01-02\n- One\n* Two\ntext'), [{ version: '1.2.0', date: '2026-01-02', items: ['One', 'Two'] }]);
 });
 
+test('file session store: persists, expires and prunes (SC-06)', async () => {
+  const { FileSessionStore } = require('../src/auth/session-store');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sc-store-')), 'sessions.json');
+  const store = new FileSessionStore({ file });
+  const get = (s, sid) => new Promise((r) => s.get(sid, (e, v) => r(v)));
+  store.set('live', { cookie: { expires: new Date(Date.now() + 60000).toISOString() }, userId: '1' });
+  store.set('old', { cookie: { expires: new Date(Date.now() - 1000).toISOString() }, userId: '2' });
+  assert.equal((await get(store, 'live')).userId, '1');
+  assert.equal(await get(store, 'old'), null, 'expired sessions are not returned');
+  store.close();
+  assert.equal((fs.statSync(file).mode & 0o777).toString(8), '600');
+  const again = new FileSessionStore({ file });
+  assert.equal((await get(again, 'live')).userId, '1', 'survives a restart');
+  assert.equal(again.sessions.has('old'), false, 'pruned on load');
+  again.close();
+});
+
+test('amp stream addresses refuse private and re-binding DNS answers (SC-07)', async () => {
+  const { WebRadio } = require('../src/webradio');
+  const radio = new WebRadio({ fetchJson: async () => [] });
+  const uuid = '44444444-2222-3333-4444-555555555555';
+  radio.known.set(uuid, { uuid, name: 'X', url: 'http://stream.example.org/live' });
+  const fake = (answers) => ({ resolve4: async () => answers, resolve6: async () => { throw new Error('none'); } });
+  assert.equal((await radio.publicStreamUrl(uuid, fake([{ address: '93.184.216.34', ttl: 300 }]))).url, 'http://stream.example.org/live');
+  await assert.rejects(() => radio.publicStreamUrl(uuid, fake([{ address: '192.168.1.20', ttl: 300 }])), /private/);
+  radio.dnsRecheckMs = 1;
+  await assert.rejects(() => radio.publicStreamUrl(uuid, fake([{ address: '93.184.216.34', ttl: 0 }])), /keeps changing/);
+  // A cached answer near expiry is fine once a second lookup returns a normal lifetime.
+  let n = 0;
+  const refreshing = { resolve4: async () => [{ address: '93.184.216.34', ttl: n++ === 0 ? 1 : 300 }], resolve6: async () => { throw new Error('none'); } };
+  assert.ok(await radio.publicStreamUrl(uuid, refreshing));
+  radio.known.set(uuid, { uuid, name: 'X', url: 'http://10.0.0.5/live' });
+  await assert.rejects(() => radio.publicStreamUrl(uuid), /private/);
+});
+
+test('drivers refuse line breaks and hide device addresses (SC-02, SC-03)', async () => {
+  const HEOSDriver = require('../src/drivers/heos');
+  const DenonAVRDriver = require('../src/drivers/denon_avr');
+  const h = new HEOSDriver({ host: '127.0.0.1', port: 9 });
+  await assert.rejects(() => h.signIn('a@example.com', 'pw\r\nheos://system/sign_out'), /not allowed/);
+  await assert.rejects(() => h._request('heos://system/check_account\r\nheos://system/sign_out'), /line break/);
+  await assert.rejects(() => new DenonAVRDriver({ host: '127.0.0.1', port: 9 })._request('PW?\rPWSTANDBY'), /line break/);
+  const comp = new CompositeDriver({}, [{ type: 'denon_avr', driver: new DenonAVRDriver({ host: '127.0.0.1', port: 9, timeout: 500 }) }]);
+  const err = await comp.powerOn().then(() => null, (e) => e);
+  assert.match(err.message, /not answering|did not answer/);
+  assert.ok(!/\d+\.\d+\.\d+\.\d+/.test(err.message), 'no address in the user-facing message');
+  assert.match(String(err.cause), /127\.0\.0\.1|timeout/, 'details kept for the server log');
+});
+
 test('heos playStream sends the address as HEOS expects (not fully percent-encoded)', async () => {
   const HEOSDriver = require('../src/drivers/heos');
   const driver = new HEOSDriver({ host: '127.0.0.1', pid: '7', streamVerifyAttempts: 1, streamVerifyMs: 1 });
@@ -527,7 +579,13 @@ test('users are hashed and verified, and wrong passwords are refused', async () 
   assert.equal(loadUsers()[0].passwordHash.startsWith('$2'), true);
   assert.notEqual(loadUsers()[0].passwordHash, 'correct horse battery');
 
-  assert.deepEqual(await verifyUser('jestie', 'correct horse battery'), { id: created.id, username: 'jestie' });
+  assert.deepEqual(await verifyUser('jestie', 'correct horse battery'), { id: created.id, username: 'jestie', role: 'admin' });
+  const guest = await createUser('guest', 'another fine password', 'user');
+  assert.equal((await verifyUser('guest', 'another fine password')).role, 'user');
+  await assert.rejects(() => createUser('boss', 'long enough password', 'root'), /admin or user/);
+  const { roleOf } = require('../src/auth/users');
+  assert.equal(roleOf({ username: 'legacy' }), 'admin', 'accounts from before roles stay admin');
+  assert.ok(guest.id);
   assert.equal(await verifyUser('jestie', 'wrong password'), null);
   assert.equal(await verifyUser('nobody', 'correct horse battery'), null);
   await assert.rejects(() => createUser('jestie', 'another long password'), /already exists/);

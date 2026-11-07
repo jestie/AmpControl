@@ -1,5 +1,6 @@
 const net = require('net');
 const BaseDriver = require('./base');
+const { assertSingleLine } = require('./errors');
 
 /**
  * HEOS CLI driver (TCP 1255).
@@ -26,6 +27,7 @@ class HEOSDriver extends BaseDriver {
   }
 
   _request(command, { label = command, waitFinal = false, timeout } = {}) {
+    try { assertSingleLine(command); } catch (e) { return Promise.reject(e); }
     return new Promise((resolve, reject) => {
       let settled = false;
       let buffer = '';
@@ -115,6 +117,11 @@ class HEOSDriver extends BaseDriver {
   }
 
   async signIn(username, password) {
+    // Control characters (CR/LF included) would let one field add a second
+    // HEOS command (SC-02, CWE-93): refuse them outright.
+    if (/[\u0000-\u001f\u007f]/.test(String(username)) || /[\u0000-\u001f\u007f]/.test(String(password))) {
+      throw new Error('the HEOS email or password contains characters that are not allowed');
+    }
     const command = `heos://system/sign_in?un=${HEOSDriver._encodeValue(username)}&pw=${HEOSDriver._encodeValue(password)}`;
     const previousTimeout = this.timeout;
     this.timeout = Math.max(this.timeout, 15000); // the amp checks with the HEOS cloud

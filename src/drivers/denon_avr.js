@@ -1,5 +1,6 @@
 const net = require('net');
 const BaseDriver = require('./base');
+const { assertSingleLine } = require('./errors');
 
 /**
  * Denon/Marantz network control protocol (the "AVR" protocol on TCP 23).
@@ -25,6 +26,7 @@ class DenonAVRDriver extends BaseDriver {
   }
 
   _request(cmd, options = {}) {
+    try { assertSingleLine(cmd); } catch (e) { return Promise.reject(e); }
     const run = () => this._requestNow(cmd, options);
     const result = this.queue.then(run, run);
     this.queue = result.then(() => undefined, () => undefined);

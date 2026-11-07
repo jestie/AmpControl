@@ -12,6 +12,12 @@ devices added by configuration.
 stations right on your phone or PC, and watch the visualiser and meters move to
 the real music.
 
+![SoundControl on a desktop: the Neon glass face playing internet radio, live waves and the ghost clock](docs/screenshots/desktop.png)
+
+<p align="center"><img src="docs/screenshots/phones.png" width="720" alt="SoundControl on phones: the Retro VU and Minimal pro faces with the clock docked under the waves"></p>
+
+<sub>Screenshots: the virtual amp with the built-in digital faces (no hardware needed).</sub>
+
 > Not affiliated with or endorsed by Marantz, Denon, HEOS or TuneIn. Product
 > names are used only to say what this works with.
 

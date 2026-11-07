@@ -1,6 +1,6 @@
 {
   "name": "soundcontrol",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Device-agnostic web remote for network sound devices",
   "main": "src/server.js",
   "scripts": {

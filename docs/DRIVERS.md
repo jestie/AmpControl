@@ -105,6 +105,52 @@ const drivers = { /* existing */ my_device: MyProtocolDriver };
 - Use hostnames, not IPs, wherever the network has names for the device.
 - `volumeCap` is enforced server-side for that device (0-100).
 
+## Other brands (experimental)
+
+These drivers are written from each maker's published control protocol and
+tested against fake devices in `tests/basic.test.js`. They have **not yet been
+confirmed on real hardware**: if you own one, please try it and report back.
+
+### Yamaha MusicCast — `yamaha` (alias `musiccast`)
+Yamaha Extended Control (HTTP/JSON, port 80). Power, volume (scaled to the
+model's own maximum), mute, inputs (discovered from the device with their
+names), play/pause/skip and now playing for network sources, presets 1-40.
+
+```json
+{ "id": "lounge", "name": "Lounge receiver", "drivers": ["yamaha"],
+  "yamaha": { "host": "192.0.2.20", "zone": "main" }, "volumeCap": 40 }
+```
+Optional: `"zone": "zone2"`, `"inputs": [{"id": "hdmi1", "label": "TV"}]` to
+limit the list, `"presets": [{"id": 1, "label": "Jazz"}]`.
+
+### Onkyo / Pioneer (2016+) / Integra — `onkyo` (aliases `pioneer`, `integra`, `eiscp`)
+eISCP over TCP 60128. Power, volume, mute, inputs, play/pause/skip and now
+playing on the network input. Network Control / "Network Standby" must be on.
+
+```json
+{ "id": "den", "name": "Den receiver", "drivers": ["onkyo"],
+  "onkyo": { "host": "192.0.2.21", "volumeMax": 80,
+             "inputs": [{"id": "10", "label": "BD/DVD"}, {"id": "2B", "label": "Network"}, {"id": "2E", "label": "Bluetooth"}] },
+  "volumeCap": 40 }
+```
+`volumeMax` is the receiver's top volume step in the protocol (most use 80;
+some 100 or 200). Input ids are the two-character `SLI` codes (e.g. `23` CD,
+`22` Phono, `24` FM, `29` USB). Without `inputs` a common default list is used.
+
+### Bluesound / NAD (BluOS) — `bluos` (aliases `bluesound`, `nad`)
+BluOS HTTP API (port 11000). Volume, mute, play/pause/skip, now playing,
+BluOS presets (read from the player) and playing stream addresses, so the
+open-directory radio stations play on it. BluOS has no standby command in
+this API, so the power button is not shown.
+
+```json
+{ "id": "kitchen", "name": "Kitchen Node", "drivers": ["bluos"],
+  "bluos": { "host": "192.0.2.22" }, "volumeCap": 40 }
+```
+
+Album art served by the device itself is not passed to the browser (that
+would reveal the device's address); public https artwork is.
+
 ## Multi-protocol devices
 
 The Marantz PM7000N uses two:

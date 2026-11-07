@@ -3,6 +3,11 @@
 All notable changes to SoundControl. Versions follow [semantic versioning](https://semver.org);
 1.0.0 will follow wider real-world testing (HTTPS and the first security scan's fixes landed in 0.7.0).
 
+## [0.8.0] - 2026-11-07
+- New experimental drivers: Yamaha MusicCast (`yamaha`), Onkyo / Pioneer / Integra (`onkyo`, eISCP) and Bluesound / NAD (`bluos`), written from the published protocols and tested against fake devices; not yet confirmed on real hardware
+- Open-directory radio stations can play on BluOS players too
+- Config examples for each brand in docs/DRIVERS.md
+
 ## [0.7.0] - 2026-11-07
 Security release: every finding from the first SAST/DAST scan fixed and retested.
 - HTTPS built in: `npm run cert` makes a local certificate authority and certificate; plain HTTP redirects to HTTPS; Secure session cookie and HSTS

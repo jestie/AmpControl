@@ -11,14 +11,14 @@ const { publicError } = require('./errors');
  * other drivers when one is unreachable.
  */
 const DEFAULT_PRECEDENCE = {
-  power: ['denon_avr', 'marantz', 'avr', 'heos'],
-  volume: ['denon_avr', 'marantz', 'avr', 'heos'],
-  mute: ['denon_avr', 'marantz', 'avr', 'heos'],
-  inputs: ['denon_avr', 'marantz', 'avr', 'heos'],
-  presets: ['heos', 'denon_avr', 'marantz'],
-  playStream: ['heos', 'cast', 'upnp'],
-  transport: ['heos', 'cast', 'upnp'],
-  nowPlaying: ['heos', 'cast', 'upnp']
+  power: ['denon_avr', 'marantz', 'avr', 'yamaha', 'musiccast', 'onkyo', 'pioneer', 'integra', 'eiscp', 'heos'],
+  volume: ['denon_avr', 'marantz', 'avr', 'yamaha', 'musiccast', 'onkyo', 'pioneer', 'integra', 'eiscp', 'bluos', 'bluesound', 'nad', 'heos'],
+  mute: ['denon_avr', 'marantz', 'avr', 'yamaha', 'musiccast', 'onkyo', 'pioneer', 'integra', 'eiscp', 'bluos', 'bluesound', 'nad', 'heos'],
+  inputs: ['denon_avr', 'marantz', 'avr', 'yamaha', 'musiccast', 'onkyo', 'pioneer', 'integra', 'eiscp', 'heos'],
+  presets: ['heos', 'bluos', 'bluesound', 'nad', 'yamaha', 'musiccast', 'denon_avr', 'marantz'],
+  playStream: ['heos', 'bluos', 'bluesound', 'nad', 'cast', 'upnp'],
+  transport: ['heos', 'bluos', 'bluesound', 'nad', 'yamaha', 'musiccast', 'onkyo', 'pioneer', 'integra', 'eiscp', 'cast', 'upnp'],
+  nowPlaying: ['heos', 'bluos', 'bluesound', 'nad', 'yamaha', 'musiccast', 'onkyo', 'pioneer', 'integra', 'eiscp', 'cast', 'upnp']
 };
 
 class CompositeDriver extends BaseDriver {

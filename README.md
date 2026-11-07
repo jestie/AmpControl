@@ -4,7 +4,9 @@ A self-hosted web remote for network amplifiers on your home network. Sign in
 from a phone or PC and control the amp without hunting for the IR remote.
 
 Built for and tested on a **Marantz PM7000N** (HEOS + the Marantz/Denon network
-control protocol). The design is device-agnostic: one driver per protocol,
+control protocol). Also includes **experimental** drivers for **Yamaha MusicCast**,
+**Onkyo / Pioneer / Integra** and **Bluesound / NAD (BluOS)**, written from their
+published protocols and tested against fake devices: see `docs/DRIVERS.md`. The design is device-agnostic: one driver per protocol,
 devices added by configuration.
 
 **No amp? No problem.** Without a device config the app starts with a
@@ -163,6 +165,9 @@ Edit `config/devices.json` (schema in [`docs/DRIVERS.md`](docs/DRIVERS.md)).
 |---|---|---|
 | `heos` | HEOS CLI, TCP 1255 | playback, now playing, radio, favourites, HEOS account, transport |
 | `denon_avr` / `marantz` | Marantz/Denon network control, TCP 23 | power, volume, mute, inputs, Source Direct, sleep timer, menu keys |
+| `yamaha` *(experimental)* | Yamaha MusicCast (YXC, HTTP 80) | power, volume, mute, inputs, transport, now playing, presets |
+| `onkyo` / `pioneer` / `integra` *(experimental)* | eISCP, TCP 60128 | power, volume, mute, inputs, transport, now playing |
+| `bluos` / `bluesound` / `nad` *(experimental)* | BluOS HTTP, port 11000 | volume, mute, transport, now playing, presets, stream URLs |
 | `virtual` | none | a virtual amp for browser radio: power, volume, mute, inputs |
 | `unsupported` | none | an honest "no network control" placeholder |
 

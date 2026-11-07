@@ -482,6 +482,127 @@ test('drivers refuse line breaks and hide device addresses (SC-02, SC-03)', asyn
   assert.match(String(err.cause), /127\.0\.0\.1|timeout/, 'details kept for the server log');
 });
 
+test('yamaha MusicCast driver against a fake YXC device', async () => {
+  const http = require('http');
+  const YamahaDriver = require('../src/drivers/yamaha');
+  const state = { power: 'standby', volume: 40, max_volume: 161, mute: false, input: 'hdmi1' };
+  const srv = http.createServer((req, res) => {
+    const u = new URL(req.url, 'http://x');
+    const q = Object.fromEntries(u.searchParams);
+    const send = (o) => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ response_code: 0, ...o })); };
+    switch (u.pathname.replace('/YamahaExtendedControl/v1/', '')) {
+      case 'system/getFeatures': return send({ zone: [{ id: 'main', input_list: ['hdmi1', 'net_radio', 'bluetooth', 'bad id!'], range_step: [{ id: 'volume', min: 0, max: 161, step: 1 }] }] });
+      case 'system/getNameText': return send({ input_list: [{ id: 'hdmi1', text: 'TV' }, { id: 'net_radio', text: 'Net Radio' }] });
+      case 'main/getStatus': return send(state);
+      case 'main/setPower': state.power = q.power; return send({});
+      case 'main/setVolume': state.volume = Number(q.volume); return send({});
+      case 'main/setMute': state.mute = q.enable === 'true'; return send({});
+      case 'main/setInput': if (!['hdmi1', 'net_radio', 'bluetooth'].includes(q.input)) return send({ response_code: 3 }); state.input = q.input; return send({});
+      case 'netusb/getPlayInfo': return send({ playback: 'play', artist: 'Armin van Buuren', album: 'ASOT', track: 'Track 1', albumart_url: '/YamahaRemoteControl/AlbumART/x.jpg' });
+      case 'netusb/setPlayback': state.playback = q.playback; return send({});
+      default: return send({ response_code: 4 });
+    }
+  });
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  try {
+    const comp = new CompositeDriver({}, [{ type: 'yamaha', driver: new YamahaDriver({ host: '127.0.0.1', port: srv.address().port }) }]);
+    await comp.init();
+    assert.deepEqual(comp.getInputs().map((i) => i.label), ['TV', 'Net Radio', 'bluetooth'], 'inputs discovered, unsafe ids dropped');
+    await comp.powerOn();
+    assert.equal(await comp.getPowerState(), 'on');
+    await comp.setVolume(50);
+    assert.equal(state.volume, 81, '50% of max 161');
+    assert.equal(await comp.getVolume(), 50);
+    await comp.mute();
+    assert.equal(await comp.getMute(), true);
+    await comp.setInput('net_radio');
+    assert.equal(state.input, 'net_radio');
+    await assert.rejects(() => comp.setInput('hdmi1&power=standby'), /unknown input/);
+    const np = await comp.getNowPlaying();
+    assert.equal(np.song, 'Track 1');
+    assert.equal(np.image_url, null, 'amp-hosted art is not exposed');
+    await comp.next();
+    assert.equal(state.playback, 'next');
+  } finally { srv.close(); }
+});
+
+test('onkyo/pioneer eISCP driver against a fake device', async () => {
+  const net = require('net');
+  const OnkyoDriver = require('../src/drivers/onkyo');
+  const { frame, parseMessages } = OnkyoDriver;
+  const parsed = parseMessages(Buffer.concat([frame('PWR01'), frame('MVL28')]));
+  assert.deepEqual(parsed.messages, ['PWR01', 'MVL28'], 'frames round-trip');
+  const state = { PWR: '00', MVL: '14', AMT: '00', SLI: '23', NTI: 'Strobe', NAT: 'deadmau5', NAL: 'For Lack', NST: 'P--' };
+  const seen = [];
+  const srv = net.createServer((sock) => {
+    let buf = Buffer.alloc(0);
+    sock.on('data', (c) => {
+      const out = parseMessages(Buffer.concat([buf, c]));
+      buf = out.rest;
+      for (const m of out.messages) {
+        seen.push(m);
+        const cmd = m.slice(0, 3);
+        const arg = m.slice(3);
+        if (arg === 'QSTN') sock.write(frame(cmd + state[cmd]));
+        else if (state[cmd] !== undefined && cmd !== 'NTC') { state[cmd] = arg; sock.write(frame(cmd + arg)); }
+      }
+    });
+  });
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  try {
+    const d = new OnkyoDriver({ host: '127.0.0.1', port: srv.address().port });
+    const comp = new CompositeDriver({}, [{ type: 'onkyo', driver: d }]);
+    assert.equal(await d.init(), true);
+    await comp.powerOn();
+    assert.equal(await comp.getPowerState(), 'on');
+    await comp.setVolume(50);
+    assert.equal(state.MVL, '28', '50% of 0x50 = 0x28');
+    assert.equal(await comp.getVolume(), 50);
+    await comp.mute();
+    assert.equal(await comp.getMute(), true);
+    await comp.setInput('2B');
+    assert.equal(state.SLI, '2B');
+    await assert.rejects(() => comp.setInput('ZZ'), /unknown input/);
+    await assert.rejects(() => d._send('PWR01\r!1PWR00'), /line break/);
+    const np = await comp.getNowPlaying();
+    assert.deepEqual([np.song, np.artist], ['Strobe', 'deadmau5']);
+    assert.ok(!seen.some((m) => m.includes('\r')), 'every message is a single command');
+  } finally { srv.close(); }
+});
+
+test('bluos (Bluesound/NAD) driver against a fake player', async () => {
+  const http = require('http');
+  const BluOSDriver = require('../src/drivers/bluos');
+  const state = { volume: 20, mute: 0, state: 'pause', played: null };
+  const srv = http.createServer((req, res) => {
+    const u = new URL(req.url, 'http://x');
+    res.setHeader('Content-Type', 'text/xml');
+    if (u.pathname === '/Status') return res.end(`<status etag="1"><title1>Rock &amp; Roll</title1><artist>AC/DC</artist><album>Live</album><image>/Artwork?x</image><state>${state.state}</state><volume>${state.volume}</volume><mute>${state.mute}</mute></status>`);
+    if (u.pathname === '/Volume') { if (u.searchParams.has('level')) state.volume = Number(u.searchParams.get('level')); if (u.searchParams.has('mute')) state.mute = Number(u.searchParams.get('mute')); return res.end(`<volume mute="${state.mute}">${state.volume}</volume>`); }
+    if (u.pathname === '/Presets') return res.end('<presets><preset id="1" name="Jazz &amp; Soul" url="x"/><preset id="2" name="News"/></presets>');
+    if (u.pathname === '/Play') { state.state = 'play'; state.played = u.searchParams.get('url'); return res.end('<state>play</state>'); }
+    if (u.pathname === '/Pause') { state.state = 'pause'; return res.end('<state>pause</state>'); }
+    res.statusCode = 404; return res.end();
+  });
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  try {
+    const comp = new CompositeDriver({}, [{ type: 'bluos', driver: new BluOSDriver({ host: '127.0.0.1', port: srv.address().port }) }]);
+    await comp.init();
+    assert.equal(comp.capabilities().power, false, 'no standby command in BluOS');
+    assert.deepEqual(comp.getPresets().map((p) => p.label), ['Jazz & Soul', 'News']);
+    await comp.setVolume(35);
+    assert.equal(await comp.getVolume(), 35);
+    await comp.mute();
+    assert.equal(await comp.getMute(), true);
+    const np = await comp.getNowPlaying();
+    assert.equal(np.song, 'Rock & Roll');
+    assert.equal(np.image_url, null, 'player-hosted art is not exposed');
+    await comp.playStream('http://stream.example/live.mp3');
+    assert.equal(state.played, 'http://stream.example/live.mp3');
+    await assert.rejects(() => comp.playStream('file:///etc/passwd'), /invalid stream/);
+  } finally { srv.close(); }
+});
+
 test('heos playStream sends the address as HEOS expects (not fully percent-encoded)', async () => {
   const HEOSDriver = require('../src/drivers/heos');
   const driver = new HEOSDriver({ host: '127.0.0.1', pid: '7', streamVerifyAttempts: 1, streamVerifyMs: 1 });

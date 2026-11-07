@@ -18,6 +18,7 @@
         'Every change you make is sent to the amp and read back, so what you see is what the amp is really doing.'
       ]],
       ['p', 'No network amp? SoundControl then runs a virtual amp: internet radio plays on the device you are using, and everything else (faces, speakers, clock, alarms) works the same.'],
+      ['p', 'Supported amps: Denon and Marantz (HEOS and network control; tested on a Marantz PM7000N). Experimental, not yet tested on real hardware: Yamaha MusicCast, Onkyo / Pioneer / Integra, and Bluesound / NAD (BluOS). Devices are added in config/devices.json; see docs/DRIVERS.md.'],
       ['tip', 'Press ? or F1 at any time to open this Help. Esc closes it.']
     ] },
     { id: 'controls', icon: '🎛', title: 'Controls tab', body: [

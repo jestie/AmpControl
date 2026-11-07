@@ -192,7 +192,8 @@
     ] },
     { id: 'updating', icon: '⬆', title: 'Updating', body: [
       ['p', 'SoundControl checks GitHub for a newer version every few hours (only public release information; nothing about you is sent). When there is one, a ⬆ marker appears next to the version at the top, and admins see a banner.'],
-      ['p', 'How to update (on the server; your settings, users, alarms and certificates in data/, config/ and .env are kept):'],
+      ['p', 'Admins can press "Update now" (on the banner or here). SoundControl backs up your settings, accepts the new version only if it is signed with the trusted SoundControl release key, installs it, runs its tests and restarts (about a minute). If any step fails it goes back to the version you had. This works for copies installed with git and kept unchanged; others are told to update by hand.'],
+      ['p', 'Manual update, if you prefer (or "Update now" is not offered):'],
       ['steps', [
         'Back up first: tar czf ~/soundcontrol-backup.tgz config data .env',
         'In the SoundControl folder: git pull   (or, for a specific release: git fetch --tags && git checkout v0.11.0)',
@@ -202,7 +203,7 @@
         'Open the app and look at What\'s new.'
       ]],
       ['tip', 'Installed from a ZIP instead of git? Download the new ZIP from GitHub, unpack it, copy your config/, data/, .env (and any photos in public/img/) into the new folder, then run npm ci, npm test and start it.'],
-      ['p', 'To switch the check off, put UPDATE_CHECK=off in .env and restart.']
+      ['p', 'To switch the check off, put UPDATE_CHECK=off in .env; to hide the Update now button only, UPDATE_INSTALL=off. Restart afterwards.']
     ] },
     { id: 'new', icon: '✨', title: 'What\'s new', body: [] },
     { id: 'about', icon: 'ℹ', title: 'About', body: [] }
@@ -401,6 +402,47 @@
     // ---- update check ----
     const DISMISS_KEY = 'soundcontrol.update.dismissed';
     let role = 'user';
+    const progress = el('pre', 'help-progress');
+    progress.hidden = true;
+
+    async function installUpdate(version) {
+      if (!window.confirm(`Update SoundControl to v${version} now? It restarts when done (about a minute); settings are backed up first.`)) return;
+      open('updating');
+      progress.hidden = false;
+      progress.textContent = 'Starting…';
+      document.querySelectorAll('.help-install, .update-banner button.primary').forEach((b) => { b.disabled = true; });
+      try {
+        await api('/api/updates/install', { method: 'POST', body: JSON.stringify({ version }) });
+      } catch (e) {
+        progress.textContent = `✗ ${e.message}`;
+        document.querySelectorAll('.help-install, .update-banner button.primary').forEach((b) => { b.disabled = false; });
+        return;
+      }
+      // Follow the log; once restarting, wait for the new version to answer, then reload.
+      const timer = setInterval(async () => {
+        let st;
+        try { st = await api('/api/updates/install'); } catch (e) { st = null; }
+        if (st && st.log) progress.textContent = st.log.join('\n');
+        if (st && st.state === 'failed') { clearInterval(timer); toast(`Update failed: ${st.error}`); document.querySelectorAll('.help-install').forEach((b) => { b.disabled = false; }); return; }
+        if (!st || st.state === 'restarting') {
+          try {
+            const v = await api('/api/version');
+            if (v && v.version === version) {
+              clearInterval(timer);
+              progress.textContent += `\n✓ Now running v${version}. Reloading…`;
+              try { sessionStorage.setItem('soundcontrol.justUpdated', version); } catch (e) { /* fine */ }
+              setTimeout(() => location.reload(), 1200);
+            }
+          } catch (e) { progress.textContent = `${progress.textContent.split('\n…waiting')[0]}\n…waiting for SoundControl to come back`; }
+        }
+      }, 1500);
+    }
+
+    // After an update: open What's new once.
+    try {
+      const just = sessionStorage.getItem('soundcontrol.justUpdated');
+      if (just) { sessionStorage.removeItem('soundcontrol.justUpdated'); setTimeout(() => { open('new'); toast(`Updated to v${just}`); }, 800); }
+    } catch (e) { /* fine */ }
     function fillUpdates(u) {
       const box = el('div', 'help-update');
       if (!u || u.enabled === false) {
@@ -419,6 +461,15 @@
           a.href = u.releaseUrl; a.target = '_blank'; a.rel = 'noopener noreferrer';
           const p = el('p'); p.append(a); box.append(p);
         }
+        if (role === 'admin' && u.install && u.install.possible) {
+          const go = el('button', 'primary help-install', `⬆ Update now to v${u.latest}`);
+          go.type = 'button';
+          go.addEventListener('click', () => installUpdate(u.latest));
+          box.append(go, el('p', 'help-muted', 'Backs up your settings, checks the release signature, installs, runs the tests and restarts. If anything fails it goes back to the version you have.'));
+        } else if (u.install && u.install.reason) {
+          box.append(el('p', 'help-muted', u.install.reason));
+        }
+        box.append(progress);
       } else {
         box.append(el('p', '', u.latest ? `✓ You are up to date (v${u.current}).` : `Could not reach GitHub to check${u.error ? ` (${u.error})` : ''}. It will try again later.`));
       }
@@ -471,7 +522,15 @@
         close.type = 'button';
         close.setAttribute('aria-label', 'Dismiss until the next version');
         close.addEventListener('click', () => { try { localStorage.setItem(DISMISS_KEY, u.latest); } catch (e) { /* fine */ } banner.remove(); });
-        banner.replaceChildren(el('span', 'update-icon', '⬆'), el('span', 'update-text', `SoundControl v${u.latest} is available (you have v${u.current}).`), whatsNew, close);
+        const parts = [el('span', 'update-icon', '⬆'), el('span', 'update-text', `SoundControl v${u.latest} is available (you have v${u.current}).`), whatsNew];
+        if (u.install && u.install.possible) {
+          const now = el('button', 'primary', 'Update now');
+          now.type = 'button';
+          now.addEventListener('click', () => installUpdate(u.latest));
+          whatsNew.className = '';
+          parts.push(now);
+        }
+        banner.replaceChildren(...parts, close);
       } else if (banner) banner.remove();
     }
 

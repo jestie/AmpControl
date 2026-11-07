@@ -1001,3 +1001,6 @@ p.help-warn.small { font-size: 0.78rem !important; padding: 0.45rem 0.6rem; bord
 .help-update h3 { color: #ffcf4a !important; }
 .help-check { margin-top: 0.3rem; min-height: 36px; }
 @media (max-width: 560px) { .update-banner { margin: 0.6rem 0.8rem 0; flex-wrap: wrap; } }
+.help-install { margin-top: 0.5rem; }
+.help-progress { margin: 0.6rem 0 0; padding: 0.6rem 0.75rem; max-height: 220px; overflow: auto; border-radius: 10px;
+  background: #050608; border: 1px solid var(--border); color: #bfe3ff; font: 0.78rem/1.45 "DejaVu Sans Mono", Consolas, monospace; white-space: pre-wrap; }

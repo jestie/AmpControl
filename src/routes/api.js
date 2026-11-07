@@ -5,6 +5,7 @@ const { isRemoteKey, pressRemoteKey } = require('../remote');
 const { WebRadio } = require('../webradio');
 const { versionInfo } = require('../version');
 const { UpdateChecker } = require('../updates');
+const { Updater } = require('../updater');
 const { publicError } = require('../drivers/errors');
 const { probe, Scanner } = require('../discovery');
 
@@ -118,8 +119,25 @@ function createApiRouter({ manager, logger, scheduler = null, webradio = new Web
 
   // Newer release on GitHub? (cached; UPDATE_CHECK=off disables it)
   const updates = new UpdateChecker({ currentVersion: VERSION.version, logger });
-  router.get('/updates', wrap(async (req, res) => res.json(await updates.check())));
-  router.post('/updates/check', requireAdmin, wrap(async (req, res) => res.json(await updates.check({ force: true }))));
+  // One-click install of the latest SIGNED release (admins; UPDATE_INSTALL=off disables it).
+  const updater = new Updater({ currentVersion: VERSION.version, logger });
+  router.get('/updates', wrap(async (req, res) => {
+    const result = await updates.check();
+    const install = req.session.role === 'admin' ? await updater.preflight() : { possible: false, reason: 'Only an admin can update SoundControl.' };
+    res.json({ ...result, install });
+  }));
+  router.post('/updates/check', requireAdmin, wrap(async (req, res) => res.json({ ...(await updates.check({ force: true })), install: await updater.preflight() })));
+  router.get('/updates/install', requireAdmin, (req, res) => res.json(updater.status()));
+  router.post('/updates/install', requireAdmin, wrap(async (req, res) => {
+    const latest = (await updates.check()).latest;
+    const wanted = String((req.body || {}).version || '');
+    if (!latest || wanted !== latest) return badRequest(res, 'that is not the latest release; refresh and try again');
+    try {
+      res.json(await updater.start(wanted, { user: req.session.username }));
+    } catch (e) {
+      badRequest(res, e.message);
+    }
+  }));
 
   router.get('/session', (req, res) => {
     res.json({ user: req.session.username, role: req.session.role === 'admin' ? 'admin' : 'user' });

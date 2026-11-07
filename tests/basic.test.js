@@ -730,6 +730,95 @@ test('update check: newer GitHub tag, changes since the running version, offline
   assert.equal(new UpdateChecker({ currentVersion: '1.0.0', repo: '../../evil host', get }).repo, 'jestie/AmpControl', 'repo name is validated');
 });
 
+test('one-click update: only signed releases, fast-forward, rollback on failed tests', async () => {
+  const { execFileSync } = require('child_process');
+  const { Updater } = require('../src/updater');
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-upd-'));
+  const sh = (cwd, cmd, args) => execFileSync(cmd, args, { cwd, stdio: 'pipe' }).toString().trim();
+  const git = (cwd, ...args) => sh(cwd, 'git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', '-c', 'init.defaultBranch=main', '-c', 'tag.gpgSign=false', ...args]);
+  const key = (name) => { sh(base, 'ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-C', name, '-f', path.join(base, name)]); return path.join(base, `${name}.pub`); };
+  const good = key('good');
+  const evil = key('evil');
+  const signedTag = (cwd, tag, pub) => git(cwd, '-c', 'gpg.format=ssh', '-c', `user.signingkey=${pub}`, 'tag', '-s', tag, '-m', tag);
+  const origin = path.join(base, 'origin');
+  const dev = path.join(base, 'dev');
+  sh(base, 'git', ['init', '-q', '--bare', '-b', 'main', origin]);
+  sh(base, 'git', ['init', '-q', '-b', 'main', dev]);
+  fs.mkdirSync(path.join(dev, 'release'));
+  fs.writeFileSync(path.join(dev, 'release', 'allowed_signers'), `release@soundcontrol ${fs.readFileSync(good, 'utf8').split(' ').slice(0, 2).join(' ')}\n`);
+  const release = (version, pub) => {
+    fs.writeFileSync(path.join(dev, 'VERSION'), version);
+    git(dev, 'add', '-A'); git(dev, 'commit', '-q', '-m', version);
+    if (pub === 'none') git(dev, 'tag', '-a', `v${version}`, '-m', version); else signedTag(dev, `v${version}`, pub);
+    git(dev, 'push', '-q', origin, 'main', `v${version}`);
+  };
+  git(dev, 'remote', 'add', 'origin', origin);
+  release('1.0.0', good);
+  const install = path.join(base, 'install');
+  sh(base, 'git', ['clone', '-q', origin, install]);
+  fs.mkdirSync(path.join(install, 'config')); fs.writeFileSync(path.join(install, 'config', 'devices.json'), '[]');
+  fs.mkdirSync(path.join(install, 'data')); fs.writeFileSync(path.join(install, 'data', 'users.json'), '[]');
+  const head = () => sh(install, 'git', ['describe', '--tags', '--exact-match', 'HEAD']);
+
+  let testsFail = false;
+  let restarts = 0;
+  const runner = (cmd, args, opts) => {
+    if (cmd === 'npm') return Promise.resolve(args[0] === 'test' ? (testsFail ? '# pass 2\n# fail 1' : '# pass 3\n# fail 0') : 'installed');
+    return new Promise((resolve, reject) => require('child_process').execFile(cmd, args, { cwd: opts.cwd }, (err, out, errOut) => (err ? reject(Object.assign(err, { output: `${out}${errOut}` })) : resolve(`${out}${errOut}`.trim()))));
+  };
+  const make = (current) => new Updater({ root: install, currentVersion: current, repo: `${path.basename(base)}/origin`, runner, restart: () => { restarts += 1; } });
+  const finish = async (u) => { for (let i = 0; i < 200 && u.status().state === 'running'; i += 1) await new Promise((r) => setTimeout(r, 25)); return u.status(); };
+
+  // 1. a correctly signed newer release installs
+  release('1.1.0', good);
+  let u = make('1.0.0');
+  assert.deepEqual(await u.preflight(), { possible: true, reason: '' });
+  await u.start('1.1.0', { user: 'admin' });
+  let st = await finish(u);
+  assert.equal(st.state, 'restarting', st.log.join('\n'));
+  assert.equal(head(), 'v1.1.0');
+  assert.ok(st.log.some((l) => /Signature verified/.test(l)));
+  assert.ok(fs.readdirSync(path.join(install, 'data', 'backups')).some((f) => f.startsWith('before-v1.1.0')), 'backup made');
+  await new Promise((r) => setTimeout(r, 1600));
+  assert.equal(restarts, 1);
+
+  // 2. signed by an attacker's key: refused, nothing moves
+  release('1.2.0', evil);
+  u = make('1.1.0');
+  await u.start('1.2.0');
+  st = await finish(u);
+  assert.equal(st.state, 'failed');
+  assert.match(st.error, /not signed by a trusted release key/);
+  assert.equal(head(), 'v1.1.0');
+
+  // 3. unsigned: refused
+  release('1.3.0', 'none');
+  u = make('1.1.0');
+  await u.start('1.3.0');
+  st = await finish(u);
+  assert.match(st.error, /not signed by a trusted release key/);
+  assert.equal(head(), 'v1.1.0');
+
+  // 4. signed but tests fail: rolled back
+  release('1.4.0', good);
+  testsFail = true;
+  u = make('1.1.0');
+  await u.start('1.4.0');
+  st = await finish(u);
+  assert.equal(st.state, 'failed');
+  assert.match(st.error, /test\(s\) failed/);
+  assert.ok(st.log.some((l) => /Rolled back to v1\.1\.0/.test(l)), st.log.join('\n'));
+  assert.equal(head(), 'v1.1.0');
+
+  // 5. local code changes: refused up front
+  fs.writeFileSync(path.join(install, 'VERSION'), 'tampered');
+  assert.match((await make('1.1.0').preflight()).reason, /local code changes/);
+  sh(install, 'git', ['checkout', '--', 'VERSION']);
+  // trusted signers come from the installed copy at start-up, not from the download
+  assert.match(make('1.1.0').trustedSigners, /^release@soundcontrol ssh-ed25519 /);
+  assert.equal((await new Updater({ root: install, currentVersion: '1.1.0', enabled: false }).preflight()).possible, false);
+});
+
 test('heos playStream sends the address as HEOS expects (not fully percent-encoded)', async () => {
   const HEOSDriver = require('../src/drivers/heos');
   const driver = new HEOSDriver({ host: '127.0.0.1', pid: '7', streamVerifyAttempts: 1, streamVerifyMs: 1 });

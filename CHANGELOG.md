@@ -3,6 +3,11 @@
 All notable changes to SoundControl. Versions follow [semantic versioning](https://semver.org);
 1.0.0 will follow wider real-world testing (HTTPS and the first security scan's fixes landed in 0.7.0).
 
+## [0.12.0] - 2026-11-07
+- One-click updates: admins press "Update now"; SoundControl backs up settings, accepts only release tags signed with the trusted release key (release/allowed_signers, read from the installed version), fast-forwards, runs npm ci and the tests, restarts, and rolls back automatically on failure
+- Releases are now signed (SSH signatures); docs/RELEASING.md explains how
+- Update once by hand to 0.12.0; from then on "Update now" does it for you
+
 ## [0.11.0] - 2026-11-07
 - Update check: SoundControl compares itself with the latest release on GitHub (every few hours; public data only; UPDATE_CHECK=off disables it)
 - When a newer version exists: a ⬆ marker next to the version for everyone, and a banner for admins (dismiss until the next version)

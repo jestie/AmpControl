@@ -4,6 +4,7 @@ const { csrfProtection } = require('../auth/csrf');
 const { isRemoteKey, pressRemoteKey } = require('../remote');
 const { WebRadio } = require('../webradio');
 const { versionInfo } = require('../version');
+const { UpdateChecker } = require('../updates');
 const { publicError } = require('../drivers/errors');
 const { probe, Scanner } = require('../discovery');
 
@@ -114,6 +115,11 @@ function createApiRouter({ manager, logger, scheduler = null, webradio = new Web
   // Version + release notes (signed-in only; read once per process).
   const VERSION = versionInfo();
   router.get('/version', (req, res) => res.json(VERSION));
+
+  // Newer release on GitHub? (cached; UPDATE_CHECK=off disables it)
+  const updates = new UpdateChecker({ currentVersion: VERSION.version, logger });
+  router.get('/updates', wrap(async (req, res) => res.json(await updates.check())));
+  router.post('/updates/check', requireAdmin, wrap(async (req, res) => res.json(await updates.check({ force: true }))));
 
   router.get('/session', (req, res) => {
     res.json({ user: req.session.username, role: req.session.role === 'admin' ? 'admin' : 'user' });

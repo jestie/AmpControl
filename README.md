@@ -44,6 +44,9 @@ the real music.
   tools may report a scan as a port scan. Works where multicast discovery
   cannot (e.g. WSL in NAT mode). Only private addresses can be probed.
 - **Name it yourself**: tap ✎ to rename a device and its room line.
+- **Update notices**: the app checks GitHub for newer releases (public data
+  only; `UPDATE_CHECK=off` disables it) and shows a ⬆ marker, an admin banner
+  and Help → Updating with what changed and how to update.
 - **Help built in**: the ? Help button (or press ? / F1) opens a searchable
   guide to every feature, troubleshooting and privacy notes, plus What's new.
   Release history: [CHANGELOG.md](CHANGELOG.md).

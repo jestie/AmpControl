@@ -700,6 +700,36 @@ test('heos favourites: named presets, add by station, remove, now-playing flag',
   assert.equal((await driver.getNowPlaying()).canFavourite, true);
 });
 
+test('update check: newer GitHub tag, changes since the running version, offline-safe', async () => {
+  const { UpdateChecker, compareSemver } = require('../src/updates');
+  assert.equal(compareSemver('0.10.0', '0.9.1'), 1, 'numeric, not text, comparison');
+  assert.equal(compareSemver('v1.0.0', '1.0.0'), 0);
+  const calls = [];
+  let online = true;
+  const get = async (host, path) => {
+    calls.push(`${host}${path}`);
+    if (!online) throw new Error('offline');
+    if (host === 'api.github.com') return JSON.stringify([{ name: 'v0.9.1' }, { name: 'v0.11.0' }, { name: 'v0.10.0' }, { name: 'not-a-version' }]);
+    return '## [0.11.0] - 2026-11-08\n- New thing\n\n## [0.10.0] - 2026-11-07\n- Presets\n\n## [0.9.1] - 2026-11-07\n- Help\n';
+  };
+  const u = new UpdateChecker({ currentVersion: '0.9.1', repo: 'someone/SoundControl', get });
+  const r = await u.check();
+  assert.deepEqual([r.current, r.latest, r.updateAvailable], ['0.9.1', '0.11.0', true]);
+  assert.deepEqual(r.changes.map((c) => c.version), ['0.11.0', '0.10.0'], 'only what the running version lacks');
+  assert.ok(calls.includes('raw.githubusercontent.com/someone/SoundControl/v0.11.0/CHANGELOG.md'));
+  const n = calls.length;
+  await u.check();
+  assert.equal(calls.length, n, 'cached');
+  online = false;
+  const off = await u.check({ force: true });
+  assert.equal(off.latest, '0.11.0', 'keeps the last good answer when offline');
+  assert.match(off.error, /offline/);
+  const same = await new UpdateChecker({ currentVersion: '0.11.0', get: async (h) => (h === 'api.github.com' ? '[{"name":"v0.11.0"}]' : '') }).check();
+  assert.equal(same.updateAvailable, false);
+  assert.equal((await new UpdateChecker({ currentVersion: '1.0.0', enabled: false, get }).check()).enabled, false);
+  assert.equal(new UpdateChecker({ currentVersion: '1.0.0', repo: '../../evil host', get }).repo, 'jestie/AmpControl', 'repo name is validated');
+});
+
 test('heos playStream sends the address as HEOS expects (not fully percent-encoded)', async () => {
   const HEOSDriver = require('../src/drivers/heos');
   const driver = new HEOSDriver({ host: '127.0.0.1', pid: '7', streamVerifyAttempts: 1, streamVerifyMs: 1 });

@@ -3,6 +3,11 @@
 All notable changes to SoundControl. Versions follow [semantic versioning](https://semver.org);
 1.0.0 will follow wider real-world testing (HTTPS and the first security scan's fixes landed in 0.7.0).
 
+## [0.11.0] - 2026-11-07
+- Update check: SoundControl compares itself with the latest release on GitHub (every few hours; public data only; UPDATE_CHECK=off disables it)
+- When a newer version exists: a ⬆ marker next to the version for everyone, and a banner for admins (dismiss until the next version)
+- Help → Updating: live status, what changed since your version, Check now (admins) and step-by-step update instructions
+
 ## [0.10.0] - 2026-11-07
 - Named presets: the preset buttons show your HEOS Favourites by name (and logo), read live from the amp; empty slots are gone
 - ☆ Save as preset next to every TuneIn station (saved without interrupting playback) and next to what is playing (only when HEOS allows it)

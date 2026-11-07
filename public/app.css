@@ -986,3 +986,18 @@ p.help-warn.small { font-size: 0.78rem !important; padding: 0.45rem 0.6rem; bord
 .radio-row { display: flex; align-items: center; gap: 0.3rem; min-width: 0; }
 .radio-row .radio-item { flex: 1; }
 .now-playing .now-star { margin-left: auto; align-self: center; }
+
+/* ---- Update available ---- */
+.update-chip { margin-left: 0.5rem; min-height: 0; padding: 0.1rem 0.55rem; font-size: 0.75rem; border-radius: 999px;
+  color: #ffcf4a; background: rgba(255, 200, 60, 0.12); border: 1px solid rgba(255, 200, 60, 0.45); }
+.update-banner { display: flex; align-items: center; gap: 0.7rem; max-width: 1480px; margin: 0.8rem auto 0; padding: 0.6rem 0.9rem;
+  border-radius: 12px; background: rgba(255, 200, 60, 0.08); border: 1px solid rgba(255, 200, 60, 0.4); font-size: 0.9rem; }
+.update-banner .update-text { flex: 1; min-width: 0; }
+.update-banner .update-icon { color: #ffcf4a; font-size: 1.1rem; }
+.update-banner button { min-height: 36px; padding: 0.3rem 0.8rem; }
+.update-dismiss { width: 36px; padding: 0 !important; }
+.help-update { padding: 0.7rem 0.9rem; border-radius: 12px; border: 1px solid var(--border); background: var(--card-soft); margin-bottom: 0.8rem; }
+.help-update.available { border-color: rgba(255, 200, 60, 0.45); }
+.help-update h3 { color: #ffcf4a !important; }
+.help-check { margin-top: 0.3rem; min-height: 36px; }
+@media (max-width: 560px) { .update-banner { margin: 0.6rem 0.8rem 0; flex-wrap: wrap; } }

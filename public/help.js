@@ -190,6 +190,20 @@
         ['Enter / Space', 'Next equaliser look, next input, or change the waves\' colours (when focused)']
       ]]
     ] },
+    { id: 'updating', icon: '⬆', title: 'Updating', body: [
+      ['p', 'SoundControl checks GitHub for a newer version every few hours (only public release information; nothing about you is sent). When there is one, a ⬆ marker appears next to the version at the top, and admins see a banner.'],
+      ['p', 'How to update (on the server; your settings, users, alarms and certificates in data/, config/ and .env are kept):'],
+      ['steps', [
+        'Back up first: tar czf ~/soundcontrol-backup.tgz config data .env',
+        'In the SoundControl folder: git pull   (or, for a specific release: git fetch --tags && git checkout v0.11.0)',
+        'Install exactly the tested packages: npm ci',
+        'Check it: npm test',
+        'Restart: systemctl --user restart soundcontrol   (or stop and run npm start again)',
+        'Open the app and look at What\'s new.'
+      ]],
+      ['tip', 'Installed from a ZIP instead of git? Download the new ZIP from GitHub, unpack it, copy your config/, data/, .env (and any photos in public/img/) into the new folder, then run npm ci, npm test and start it.'],
+      ['p', 'To switch the check off, put UPDATE_CHECK=off in .env and restart.']
+    ] },
     { id: 'new', icon: '✨', title: 'What\'s new', body: [] },
     { id: 'about', icon: 'ℹ', title: 'About', body: [] }
   ];
@@ -382,7 +396,89 @@
     const logout = document.getElementById('logout');
     if (logout) logout.before(button);
 
-    api('/api/version').then((v) => { info = v; fillVersion(); }).catch(() => { /* help still works */ });
+    api('/api/version').then((v) => { info = v; fillVersion(); loadUpdates(); }).catch(() => { /* help still works */ });
+
+    // ---- update check ----
+    const DISMISS_KEY = 'soundcontrol.update.dismissed';
+    let role = 'user';
+    function fillUpdates(u) {
+      const box = el('div', 'help-update');
+      if (!u || u.enabled === false) {
+        box.append(el('p', 'help-muted', 'The update check is switched off on this server (UPDATE_CHECK=off).'));
+      } else if (u.updateAvailable) {
+        box.classList.add('available');
+        box.append(el('h3', '', `⬆ Update available: v${u.latest} (you have v${u.current})`));
+        (u.changes || []).forEach((rel) => {
+          box.append(el('p', 'help-muted', `v${rel.version}${rel.date ? '  ·  ' + rel.date : ''}`));
+          const ul = el('ul');
+          rel.items.forEach((i) => ul.append(el('li', '', i)));
+          box.append(ul);
+        });
+        if (u.releaseUrl) {
+          const a = el('a', '', 'View this release on GitHub');
+          a.href = u.releaseUrl; a.target = '_blank'; a.rel = 'noopener noreferrer';
+          const p = el('p'); p.append(a); box.append(p);
+        }
+      } else {
+        box.append(el('p', '', u.latest ? `✓ You are up to date (v${u.current}).` : `Could not reach GitHub to check${u.error ? ` (${u.error})` : ''}. It will try again later.`));
+      }
+      if (u && u.checkedAt) box.append(el('p', 'help-muted', `Last checked: ${new Date(u.checkedAt).toLocaleString()}`));
+      if (role === 'admin' && u && u.enabled !== false) {
+        const again = el('button', 'help-check', 'Check now');
+        again.type = 'button';
+        again.addEventListener('click', async () => {
+          again.disabled = true;
+          try { applyUpdates(await api('/api/updates/check', { method: 'POST' })); } catch (e) { toast(e.message); }
+          again.disabled = false;
+        });
+        box.append(again);
+      }
+      const sec = blocks.updating;
+      const old = sec.querySelector('.help-update');
+      if (old) old.replaceWith(box); else sec.querySelector('h2').after(box);
+    }
+
+    function applyUpdates(u) {
+      fillUpdates(u);
+      // Top-bar marker next to the version (everyone).
+      let chip = document.querySelector('.update-chip');
+      if (u && u.updateAvailable) {
+        if (!chip) {
+          chip = el('button', 'update-chip');
+          chip.type = 'button';
+          chip.addEventListener('click', () => open('updating'));
+          const brand = document.querySelector('.topbar .brand .muted');
+          if (brand) brand.append(chip);
+        }
+        chip.textContent = `⬆ v${u.latest} available`;
+        chip.title = 'A newer SoundControl is available: see Help → Updating';
+      } else if (chip) chip.remove();
+      // Banner (admins), until dismissed for this version.
+      let banner = document.querySelector('.update-banner');
+      let dismissed = null;
+      try { dismissed = localStorage.getItem(DISMISS_KEY); } catch (e) { dismissed = null; }
+      if (role === 'admin' && u && u.updateAvailable && dismissed !== u.latest) {
+        if (!banner) {
+          banner = el('div', 'update-banner');
+          banner.setAttribute('role', 'status');
+          const main = document.getElementById('devices');
+          if (main) main.before(banner);
+        }
+        const whatsNew = el('button', 'primary', 'What\'s new');
+        whatsNew.type = 'button';
+        whatsNew.addEventListener('click', () => open('updating'));
+        const close = el('button', 'update-dismiss', '✕');
+        close.type = 'button';
+        close.setAttribute('aria-label', 'Dismiss until the next version');
+        close.addEventListener('click', () => { try { localStorage.setItem(DISMISS_KEY, u.latest); } catch (e) { /* fine */ } banner.remove(); });
+        banner.replaceChildren(el('span', 'update-icon', '⬆'), el('span', 'update-text', `SoundControl v${u.latest} is available (you have v${u.current}).`), whatsNew, close);
+      } else if (banner) banner.remove();
+    }
+
+    async function loadUpdates() {
+      try { role = (await api('/api/session')).role || 'user'; } catch (e) { role = 'user'; }
+      try { applyUpdates(await api('/api/updates')); } catch (e) { /* the check is optional */ }
+    }
 
     return { open };
   }

@@ -36,7 +36,7 @@ function sessionSecret() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-function createApp({ manager = require('./manager'), logger = require('./utils/logger'), limiter, scheduler = null, tls = false, spotify = null, sessionStore = new FileSessionStore() } = {}) {
+function createApp({ manager = require('./manager'), logger = require('./utils/logger'), limiter, scheduler = null, tls = false, spotify = null, favourites = null, sessionStore = new FileSessionStore() } = {}) {
   // HTTPS on: Secure cookies, HSTS, and the Spotify callback on the HTTPS port (SC-01).
   if (!spotify) spotify = new Spotify({ logger, port: tls ? (parseInt(process.env.HTTPS_PORT, 10) || 8443) : (parseInt(process.env.PORT, 10) || 8095), https: tls });
   const app = express();
@@ -207,7 +207,7 @@ function createApp({ manager = require('./manager'), logger = require('./utils/l
     res.json({ ok: true });
   });
 
-  app.use('/api', createApiRouter({ manager, logger, scheduler, spotify }));
+  app.use('/api', createApiRouter({ manager, logger, scheduler, spotify, favourites }));
 
   app.use((req, res) => {
     if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'not found' });

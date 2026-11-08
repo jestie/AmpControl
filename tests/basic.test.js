@@ -6,6 +6,7 @@ const path = require('node:path');
 
 // Tests never touch the real data/ files.
 process.env.SESSIONS_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sc-sess-')), 'sessions.json');
+process.env.FAVOURITES_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sc-fav-')), 'favourites.json');
 
 const { clampVolume, validateStreamUrl } = require('../src/utils/volume');
 const CompositeDriver = require('../src/drivers/composite');
@@ -1079,4 +1080,106 @@ test('HTTP API: auth, CSRF, volume cap and device privacy', async (t) => {
     redirect: 'manual'
   });
   assert.equal(logout.status, 302);
+});
+
+test('♥ my stations: per user, validated, deduped, capped, reordered and saved', () => {
+  const { Favourites } = require('../src/favourites');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sc-fav-unit-')), 'favourites.json');
+  const fav = new Favourites({ file, max: 3 });
+  const uuid = '96062a7b-0601-11e8-ae97-52543be04c81';
+
+  let list = fav.add('jestie', { source: 'tunein', mid: 's24939', cid: 'c100000948', name: '  BBC Radio 6\u0007 Music ', image: 'https://cdn-radiotime-logos.tunein.com/s24939q.png' });
+  assert.equal(list.length, 1);
+  assert.deepEqual({ ...list[0], addedAt: undefined }, { id: 'tunein:s24939', source: 'tunein', mid: 's24939', cid: 'c100000948', name: 'BBC Radio 6 Music', image: 'https://cdn-radiotime-logos.tunein.com/s24939q.png', addedAt: undefined });
+  list = fav.add('jestie', { source: 'directory', uuid, name: 'Radio Paradise', image: 'javascript:alert(1)' });
+  assert.equal(list[1].image, '', 'only http(s) logos are kept');
+  assert.equal(fav.add('jestie', { source: 'tunein', mid: 's24939', name: 'Renamed' }).length, 2, 'the same station is not added twice');
+  assert.equal(fav.list('jestie')[0].name, 'Renamed');
+
+  // Another user has their own list.
+  assert.deepEqual(fav.list('dad'), []);
+  fav.add('dad', { source: 'tunein', mid: 's17077', name: 'Classic FM' });
+  assert.equal(fav.list('jestie').length, 2);
+  // A username that looks like an object key is just a name.
+  fav.add('__proto__', { source: 'tunein', mid: 's1', name: 'x' });
+  assert.equal({}.mid, undefined);
+  assert.equal(fav.list('__proto__').length, 1);
+
+  for (const bad of [
+    { source: 'tunein', mid: 'bad mid;rm' },
+    { source: 'tunein', mid: 's1', cid: 'bad cid<>' },
+    { source: 'directory', uuid: 'not-a-uuid' },
+    { source: 'stream', url: 'http://10.0.0.1/' },
+    null
+  ]) assert.throws(() => fav.add('jestie', bad));
+  assert.throws(() => fav.add('bad user!', { source: 'tunein', mid: 's1' }), /not signed in/);
+
+  fav.add('jestie', { source: 'tunein', mid: 's3', name: 'Three' });
+  assert.throws(() => fav.add('jestie', { source: 'tunein', mid: 's4', name: 'Four' }), /up to 3/);
+
+  list = fav.reorder('jestie', [`directory:${uuid}`, 'tunein:s3']);
+  assert.deepEqual(list.map((s) => s.id), [`directory:${uuid}`, 'tunein:s3', 'tunein:s24939'], 'missing ids keep their place at the end');
+  assert.throws(() => fav.reorder('jestie', ['tunein:nope']), /invalid order/);
+  assert.equal(fav.remove('jestie', 'tunein:s3').length, 2);
+  assert.throws(() => fav.remove('jestie', 'tunein:s3'), /not found/);
+
+  // Saved privately and read back the same; damaged entries are skipped.
+  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+  data.users.jestie.push({ source: 'tunein', mid: 'bad mid' });
+  fs.writeFileSync(file, JSON.stringify(data));
+  const again = new Favourites({ file, max: 3 });
+  assert.deepEqual(again.list('jestie').map((s) => s.id), [`directory:${uuid}`, 'tunein:s24939']);
+  assert.equal(again.list('dad')[0].name, 'Classic FM');
+});
+
+test('♥ my stations over HTTP: signed in, CSRF, each user sees only their own', async (t) => {
+  process.env.USERS_FILE = tempUsersFile();
+  process.env.SESSION_SECRET = 'test-secret-that-is-long-enough-for-sessions-1234';
+  const { createUser } = require('../src/auth/users');
+  const createApp = require('../src/app');
+  const { Favourites } = require('../src/favourites');
+  await createUser('alice', 'a-long-test-password');
+  await createUser('bobby', 'a-long-test-password', 'user');
+  const favourites = new Favourites({ file: path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sc-fav-http-')), 'favourites.json') });
+  const manager = { getDevices: () => [], getDevice: () => null, getVolumeCap: () => 40, getDriver: () => null };
+  const app = createApp({ manager, favourites, logger: { info() {}, warn() {}, error() {} } });
+  const server = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  async function signIn(username) {
+    const login = await fetch(`${base}/login`, {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `username=${username}&password=a-long-test-password`, redirect: 'manual'
+    });
+    const cookie = (login.headers.get('set-cookie') || '').split(';')[0];
+    const html = await (await fetch(`${base}/`, { headers: { Cookie: cookie } })).text();
+    const token = /name="csrf-token" content="([^"]+)"/.exec(html)[1];
+    const call = (p, method = 'GET', body) => fetch(`${base}${p}`, {
+      method, headers: { Cookie: cookie, 'Content-Type': 'application/json', 'X-CSRF-Token': token }, body: body && JSON.stringify(body)
+    });
+    return { cookie, call };
+  }
+
+  assert.equal((await fetch(`${base}/api/my/stations`)).status, 401);
+  const alice = await signIn('alice');
+  const bobby = await signIn('bobby');
+
+  const noToken = await fetch(`${base}/api/my/stations`, { method: 'POST', headers: { Cookie: alice.cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ source: 'tunein', mid: 's1' }) });
+  assert.equal(noToken.status, 403);
+
+  let res = await alice.call('/api/my/stations', 'POST', { source: 'tunein', mid: 'a/b:c', name: 'Slashy' });
+  assert.equal(res.status, 200);
+  await alice.call('/api/my/stations', 'POST', { source: 'tunein', mid: 's2', name: 'Two' });
+  assert.equal((await alice.call('/api/my/stations', 'POST', { source: 'directory', uuid: 'nope' })).status, 400);
+  assert.equal((await bobby.call('/api/my/stations')).status, 200);
+  assert.deepEqual(await (await bobby.call('/api/my/stations')).json(), [], 'bobby does not see alice\'s list');
+
+  res = await alice.call('/api/my/stations/order', 'PUT', { ids: ['tunein:s2', 'tunein:a/b:c'] });
+  assert.deepEqual((await res.json()).map((s) => s.mid), ['s2', 'a/b:c']);
+  res = await alice.call(`/api/my/stations/${encodeURIComponent('tunein:a/b:c')}`, 'DELETE');
+  assert.deepEqual((await res.json()).map((s) => s.mid), ['s2']);
+  assert.equal((await bobby.call(`/api/my/stations/${encodeURIComponent('tunein:s2')}`, 'DELETE')).status, 404, 'bobby cannot remove alice\'s station');
+  assert.equal(favourites.list('alice').length, 1);
 });

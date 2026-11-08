@@ -137,6 +137,7 @@
       el('div', { class: 'now-playing' }, [
         refs.artPlaceholder,
         el('div', { class: 'track' }, [refs.title, refs.sub]),
+        (refs.nowHeart = el('span', { class: 'now-heart' })),
         (refs.nowStar = el('button', { type: 'button', class: 'fav-star now-star', title: 'Save what is playing as a preset', 'aria-label': 'Save what is playing as a preset', text: '☆', hidden: 'hidden' }))
       ]),
       refs.transport,
@@ -211,7 +212,9 @@
       if (item.kind !== 'station' || !item.mid) return el('li', {}, [row]);
       const star = el('button', { type: 'button', class: 'fav-star', title: 'Save as a preset (HEOS Favourite)', 'aria-label': `Save ${item.name} as a preset`, text: '☆' });
       star.addEventListener('click', () => saveFavourite(card, { mid: item.mid, name: item.name }, star));
-      return el('li', { class: 'radio-row' }, [row, star]);
+      const folder = radio.stack.length ? radio.stack[radio.stack.length - 1].cid : null;
+      const heart = window.MyStations ? window.MyStations.heart({ source: 'tunein', mid: item.mid, cid: folder || null, name: item.name, image: item.image || '' }) : null;
+      return el('li', { class: 'radio-row' }, [row, heart, star]);
     }
 
     function renderRadio(page, append) {
@@ -269,20 +272,24 @@
           el('span', { class: 'radio-name' }, [station.name, el('span', { class: 'wr-meta', text: meta })]),
           el('span', { class: 'radio-go', text: '▶' })
         ]);
-        row.addEventListener('click', async () => {
-          setNote(card, `Tuning the amp to ${station.name}…`);
-          try {
-            await api(`/api/devices/${card.id}/webradio/play-on-amp`, { method: 'POST', body: JSON.stringify({ uuid: station.uuid }) });
-            toast(`Playing ${station.name} on the amp`);
-            setNote(card, '');
-          } catch (e) {
-            setNote(card, e.message, true);
-          }
-          setTimeout(() => refresh(card.id), 1500);
-        });
-        refs.radioList.append(el('li', {}, [row]));
+        row.addEventListener('click', () => playDirectoryOnAmp(station));
+        const heart = window.MyStations ? window.MyStations.heart({ source: 'directory', uuid: station.uuid, name: station.name, image: station.favicon || '' }) : null;
+        refs.radioList.append(el('li', { class: 'radio-row' }, [row, heart]));
       }
     }
+
+    async function playDirectoryOnAmp(station) {
+      setNote(card, `Tuning the amp to ${station.name}…`);
+      try {
+        await api(`/api/devices/${card.id}/webradio/play-on-amp`, { method: 'POST', body: JSON.stringify({ uuid: station.uuid }) });
+        toast(`Playing ${station.name} on the amp`);
+        setNote(card, '');
+      } catch (e) {
+        setNote(card, e.message, true);
+      }
+      setTimeout(() => refresh(card.id), 1500);
+    }
+    card.playDirectoryOnAmp = playDirectoryOnAmp;
 
     function openFolder(title, cid) {
       radio.stack.push({ title, cid });
@@ -302,6 +309,7 @@
         setNote(card, e.message, true);
       }
     }
+    card.playTuneIn = playStation;
     card.playLastStation = () => {
       let last = null;
       try { last = JSON.parse(localStorage.getItem(RADIO_KEY) || 'null'); } catch (e) { last = null; }
@@ -659,6 +667,7 @@
     } else {
       buttons.clock.hidden = true;
     }
+    buildRadioViews(card, panels.radio);
     root.replaceChildren(stage, deck);
     root.classList.add('tabbed');
 
@@ -673,6 +682,7 @@
           if (what === 'internet_radio' && card.playLastStation) card.playLastStation();
           if (what === 'fav_call') {
             select('radio');
+            if (card.showRadioView) card.showRadioView('presets');
             refs.presetSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
           }
         }
@@ -773,6 +783,86 @@
   }
 
   // ★ Save a station (or what is playing) as a preset = HEOS Favourite.
+  // ---- Radio tab views: ♥ Favourites · Browse · Presets ----
+  const RADIO_VIEW_KEY = 'soundcontrol.radio.view';
+  function buildRadioViews(card, panel) {
+    const refs = card.refs;
+    const browse = el('div', { class: 'radio-view', role: 'tabpanel' });
+    const presets = el('div', { class: 'radio-view', role: 'tabpanel' });
+    const favs = el('div', { class: 'radio-view', role: 'tabpanel' });
+    // Everything already in the Radio tab is "Browse", except the presets.
+    for (const child of [...panel.children]) (child === refs.presetSection ? presets : browse).append(child);
+    if (!presets.contains(refs.presetSection)) presets.append(refs.presetSection);
+
+    const mine = window.MyStations ? window.MyStations.panel({
+      play: (s) => playFavourite(card, s),
+      why: (s) => whyNot(card, s),
+      onCount: () => card.updateRadioViews && card.updateRadioViews()
+    }) : null;
+    if (mine) favs.append(mine.section);
+
+    const views = { favs, browse, presets };
+    const labels = { favs: '♥ Favourites', browse: 'Browse', presets: '☆ Presets' };
+    const seg = el('div', { class: 'seg radio-seg', role: 'tablist', 'aria-label': 'Radio' });
+    const segBtn = {};
+    for (const id of Object.keys(views)) {
+      segBtn[id] = el('button', { type: 'button', class: 'seg-btn', role: 'tab', text: labels[id] });
+      segBtn[id].addEventListener('click', () => show(id, true));
+      seg.append(segBtn[id]);
+    }
+    let current = null;
+    let chosen = null;
+    try { chosen = localStorage.getItem(RADIO_VIEW_KEY); } catch (e) { chosen = null; }
+    function show(id, byUser = false) {
+      if (!views[id] || segBtn[id].hidden) id = 'browse';
+      current = id;
+      for (const [k, v] of Object.entries(views)) {
+        v.hidden = k !== id;
+        segBtn[k].classList.toggle('active', k === id);
+        segBtn[k].setAttribute('aria-selected', String(k === id));
+      }
+      if (byUser) {
+        chosen = id;
+        try { localStorage.setItem(RADIO_VIEW_KEY, id); } catch (e) { /* fine */ }
+      }
+    }
+    card.showRadioView = (id) => show(id, false);
+    card.updateRadioViews = () => {
+      // Presets only where the amp has them; Favourites opens first once there are some.
+      segBtn.presets.hidden = Boolean(refs.presetSection.hidden);
+      const count = mine ? mine.count() : 0;
+      if (current === null || (current === 'presets' && segBtn.presets.hidden)) show(chosen && views[chosen] ? chosen : (count ? 'favs' : 'browse'));
+      if (mine) mine.render();
+    };
+    // The virtual amp's play/stop bar stays visible whichever view is open.
+    const top = [seg];
+    if (card.webradio && card.webradio.nowBar) top.unshift(card.webradio.nowBar);
+    panel.replaceChildren(...top, favs, browse, presets);
+    if (mine) mine.ready().then(() => card.updateRadioViews());
+    card.updateRadioViews();
+  }
+
+  // Can this ♥ favourite play on this card? '' when yes, otherwise why not.
+  function whyNot(card, station) {
+    const caps = (card.data && card.data.capabilities) || {};
+    if (station.source === 'tunein') {
+      if (card.webradio) return 'TuneIn needs a real amp';
+      if (!caps.radio) return 'this amp has no TuneIn';
+      if (card.account && card.account.signedIn === false) return 'sign the amp in to HEOS first';
+      return '';
+    }
+    if (card.webradio) return '';
+    if (!caps.playStream) return 'this amp cannot play it';
+    if (card.account && card.account.signedIn === false) return 'sign the amp in to HEOS first';
+    return '';
+  }
+
+  function playFavourite(card, station) {
+    if (station.source === 'tunein') return card.playTuneIn({ mid: station.mid, name: station.name }, station.cid || null);
+    if (card.webradio) return card.webradio.playFavourite(station);
+    return card.playDirectoryOnAmp({ uuid: station.uuid, name: station.name });
+  }
+
   async function saveFavourite(card, body, button) {
     if (button) button.disabled = true;
     try {
@@ -843,6 +933,16 @@
       card.refs.nowStar.textContent = already ? '★' : '☆';
       card.refs.nowStar.classList.toggle('saved', already);
     }
+    if (card.refs.nowHeart) {
+      // ♥ what is playing: TuneIn stations only (HEOS service id 3), as those can be replayed by id.
+      const np = data.nowPlaying || {};
+      const tunein = Boolean(window.MyStations && caps.radio && np.mid && String(np.sid) === '3' && /^[A-Za-z0-9%._~:/+-]{1,128}$/.test(String(np.mid)));
+      const key = tunein ? String(np.mid) : '';
+      if (key !== card.nowHeartFor) {
+        card.nowHeartFor = key;
+        card.refs.nowHeart.replaceChildren(tunein ? window.MyStations.heart({ source: 'tunein', mid: String(np.mid), name: np.station || np.song || 'TuneIn station', image: np.image_url || '' }) : '');
+      }
+    }
     if (card.faceplate) card.faceplate.update(data);
     if (card.faces) card.faces.update(data);
     if (card.webradio) card.webradio.update(data);
@@ -883,6 +983,8 @@
       card.refs.presetSection.hidden = true;
       card.refs.streamForm.hidden = true;
     }
+
+    if (card.updateRadioViews) card.updateRadioViews();
 
     const anyControl = caps.power || caps.volume || caps.inputs || caps.presets || caps.playStream || caps.transport;
     if (!anyControl) setNote(card, 'This device has no network control yet.');
@@ -952,5 +1054,6 @@
   });
 
   if (window.HelpCentre) window.HelpCentre.create({ api, toast });
+  if (window.MyStations) window.MyStations.init(api, toast);
   load();
 })();

@@ -61,6 +61,9 @@ the real music.
 - **Clickable handset** (optional): the RC004PM remote beside the amp, every
   button wired to its real job. Buttons the amp can confirm report what
   happened; menu keys the amp cannot confirm say so.
+- **♥ Favourite stations**: tap ♡ next to any station to keep it in your own
+  list (Radio → ♥ Favourites). Each user has their own, it works for TuneIn and
+  open-directory stations, and it is separate from the amp's presets.
 - **Internet radio**: browse and search TuneIn through HEOS (local radio,
   genres, news, sports, podcasts), with station logos and one-tap play.
 - **Spotify** (Premium): paste a playlist, album or track link, or pick one of
@@ -242,11 +245,12 @@ src/server.js       startup/shutdown, device init
 src/routes/api.js   REST API, capability checks, volume cap
 src/remote.js       the handset: button -> action, from a fixed list
 src/schedule.js     alarms, timers, reminders (data/schedule.json, not in git)
+src/favourites.js   ♥ favourite stations per user (data/favourites.json, not in git)
 src/manager.js      loads devices, builds composite drivers
 src/drivers/        heos, denon_avr, composite, unsupported
 src/auth/           users (bcrypt), csrf, login limiter
-public/             app.js, faces.js, webradio.js, faceplate.js, handset.js,
-                    visualizer.js, clock.js, app.css
+public/             app.js, faces.js, webradio.js, favourites.js, faceplate.js,
+                    handset.js, visualizer.js, clock.js, app.css
 src/webradio.js     Radio Browser search + safe stream pass-through
 src/spotify.js      Spotify sign-in (PKCE) and playback via the Web API
 src/discovery.js    detect amps by IP (read-only queries) and scan a home /24

@@ -69,6 +69,7 @@
       ]]
     ] },
     { id: 'radio', icon: '📻', title: 'Radio', body: [
+      ['p', 'The Radio tab has three views at the top: ♥ Favourites (your own stations), Browse (find stations) and ☆ Presets (the amp\'s HEOS Favourites; only shown on amps that have them).'],
       ['p', 'With a HEOS amp (signed in to HEOS):'],
       ['ul', [
         'Browse TuneIn: Local Radio, Trending, Music genres, Talk, Sports, News, By Location, By Language, Podcasts.',
@@ -82,6 +83,15 @@
         'Save a preset with ☆: next to any TuneIn station in the list (it is saved without interrupting what is playing), or next to what is playing (only shown when HEOS allows it: Bluetooth, AUX and plain stream addresses cannot be favourites). Presets → Edit → ✕ removes one.',
         'To pick the exact slot number or reorder presets, use the HEOS app, or the real remote: Favorites Add, choose the number with ▲▼, then Enter.',
         'The stream box takes direct audio addresses only (for example ending in .mp3 or .aac). Links to Spotify, YouTube or Apple Music are web pages, not audio: the box tells you what to do instead.'
+      ]]
+    ] },
+    { id: 'favourites', icon: '♥', title: 'My favourite stations', body: [
+      ['p', 'Tap ♡ next to any station (TuneIn, the open directory, or what is playing) to keep it in Radio → ♥ Favourites. Tap ♥ again to remove it.'],
+      ['ul', [
+        'Your list is your own: everyone who signs in has a separate list, and it follows you from phone to PC.',
+        'It is kept by SoundControl, not the amp, so it has no slot limit (up to 200) and works without HEOS. A station can be both a favourite (♥) and a preset (☆).',
+        'Drag ≡ to change the order, or focus ≡ and use the arrow keys. Once you have favourites, the Radio tab opens on them.',
+        'Tapping a favourite plays it the right way: TuneIn stations through the amp; open-directory stations on the amp, or on this device with the virtual amp. A station that cannot play on this amp is greyed out and says why.'
       ]]
     ] },
     { id: 'spotify', icon: '🎵', title: 'Spotify', body: [
@@ -175,6 +185,7 @@
         'The microphone mode analyses sound on your device; nothing is recorded or sent.',
         'Browser radio passes through the server only for stations from the open directory, and never to addresses inside your home network.',
         'The version number is only shown after signing in.',
+        'Favourite stations are stored on the server per user (data/favourites.json): only each station\'s id, name and logo address, never a stream address.',
         'The connection is HTTPS (when set up with npm run cert); plain HTTP only redirects to it. Session cookies are Secure and HSTS is on.',
         'Admins manage account-level settings (Spotify, HEOS account, names); regular users control the amp, radio and clock.',
         'Commands to the amp are checked so a field cannot slip in an extra command, and error messages never show device addresses.'

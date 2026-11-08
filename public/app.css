@@ -984,7 +984,8 @@ p.help-warn.small { font-size: 0.78rem !important; padding: 0.45rem 0.6rem; bord
 .fav-star.saved { color: #ffcf4a; text-shadow: 0 0 8px rgba(255, 200, 60, 0.6); }
 .radio-row { display: flex; align-items: center; gap: 0.3rem; min-width: 0; }
 .radio-row .radio-item { flex: 1; }
-.now-playing .now-star { margin-left: auto; align-self: center; }
+.now-playing .now-heart { margin-left: auto; align-self: center; display: flex; }
+.now-playing .now-star { align-self: center; }
 
 /* ---- Update available ---- */
 .update-chip { margin-left: 0.5rem; min-height: 0; padding: 0.1rem 0.55rem; font-size: 0.75rem; border-radius: 999px;
@@ -1003,3 +1004,28 @@ p.help-warn.small { font-size: 0.78rem !important; padding: 0.45rem 0.6rem; bord
 .help-install { margin-top: 0.5rem; }
 .help-progress { margin: 0.6rem 0 0; padding: 0.6rem 0.75rem; max-height: 220px; overflow: auto; border-radius: 10px;
   background: #050608; border: 1px solid var(--border); color: #bfe3ff; font: 0.78rem/1.45 "DejaVu Sans Mono", Consolas, monospace; white-space: pre-wrap; }
+
+/* ---- ♥ My favourite stations ---- */
+.my-heart { flex: none; width: 36px; min-height: 36px; padding: 0; font-size: 1.15rem; line-height: 1; color: var(--muted);
+  background: transparent; border: 1px solid transparent; border-radius: 10px; }
+.my-heart:hover { border-color: var(--border); background: var(--card-soft); color: #ff6b8b; }
+.my-heart.on { color: #ff4d6d; text-shadow: 0 0 8px rgba(255, 77, 109, 0.55); }
+.wr-now-heart { display: flex; align-items: center; }
+.radio-seg { display: flex; gap: 0.25rem; padding: 0.25rem; margin: 0 0 0.75rem; border: 1px solid var(--border);
+  border-radius: 12px; background: var(--card-soft); }
+.radio-seg .seg-btn { flex: 1; min-height: 36px; padding: 0.3rem 0.4rem; font-size: 0.85rem; border: 0; border-radius: 9px;
+  background: transparent; white-space: nowrap; }
+.radio-seg .seg-btn.active { background: var(--accent); color: #fff; }
+.radio-seg .seg-btn[hidden] { display: none; }
+.wr-now + .radio-seg { margin-top: 0.6rem; }
+.my-row { touch-action: pan-y; }
+.my-grip { flex: none; width: 30px; min-height: 36px; padding: 0; font-size: 1.1rem; color: var(--muted); cursor: grab;
+  background: transparent; border: 1px solid transparent; border-radius: 8px; touch-action: none; }
+.my-grip:focus-visible { border-color: var(--accent); }
+.my-row.dragging { opacity: 0.85; outline: 1px dashed var(--accent); border-radius: 10px; background: var(--card-soft); }
+.my-row.dragging .my-grip { cursor: grabbing; }
+.radio-item.unavailable { opacity: 0.55; }
+.my-list { align-content: start; }
+.card.tabbed .my-list { min-height: 0; }
+.my-empty { margin: 0.2rem 0 0; }
+.my-hint { margin: 0.45rem 0 0; }

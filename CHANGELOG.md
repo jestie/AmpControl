@@ -3,6 +3,12 @@
 All notable changes to SoundControl. Versions follow [semantic versioning](https://semver.org);
 1.0.0 will follow wider real-world testing (HTTPS and the first security scan's fixes landed in 0.7.0).
 
+## [0.13.0] - 2026-11-08
+- ♥ My favourite stations: tap ♡ next to any station (TuneIn, the open directory, or what is playing) to keep it; each user has their own list, kept by SoundControl (no HEOS needed, up to 200), separate from the amp's ☆ presets
+- Radio tab now has three views: ♥ Favourites · Browse · ☆ Presets; it opens on Favourites once you have some
+- Drag ≡ (or use the arrow keys) to reorder favourites; each one plays the right way for the amp, and says why when it cannot
+- Help: new "My favourite stations" section
+
 ## [0.12.1] - 2026-11-08
 - Much lighter on your computer: the waves, meters and speakers now draw at 30 frames a second (10 for the waves in standby) instead of 60, the meters stop repainting while the amp is in standby, and an invisible blur on the ghost clock is gone. Measured on a large high-DPI screen: browser CPU in standby 68% → 15% of one core, amp on 84% → 43%; motion looks the same
 - scripts/start.sh and scripts/stop.sh: run SoundControl in the background without systemd (no double starts, clean shutdown, finds a copy the updater restarted)

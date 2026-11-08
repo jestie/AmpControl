@@ -8,6 +8,7 @@ const { UpdateChecker } = require('../updates');
 const { Updater } = require('../updater');
 const { publicError } = require('../drivers/errors');
 const { probe, Scanner } = require('../discovery');
+const { Favourites } = require('../favourites');
 
 const PLAY_STATES = new Set(['play', 'pause', 'stop']);
 
@@ -15,8 +16,9 @@ function wrap(handler) {
   return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 }
 
-function createApiRouter({ manager, logger, scheduler = null, webradio = new WebRadio({ logger }), spotify = null }) {
+function createApiRouter({ manager, logger, scheduler = null, webradio = new WebRadio({ logger }), spotify = null, favourites = null }) {
   const router = express.Router();
+  const myStations = favourites || new Favourites({ logger });
 
   function requireAuth(req, res, next) {
     if (req.session && req.session.userId) return next();
@@ -342,6 +344,43 @@ function createApiRouter({ manager, logger, scheduler = null, webradio = new Web
     logger.info({ action: 'webradio_play', device: req.params.id, station: station.name, user: req.session.username });
     res.json({ ok: true });
   }));
+
+  // ---- ♥ My favourite stations: each user's own list (not the amp's HEOS Favourites) ----
+  function withFavourites(handler) {
+    return wrap(async (req, res) => {
+      try {
+        await handler(req, res, req.session.username);
+      } catch (e) {
+        if (e.message === 'not found') return res.status(404).json({ error: 'not found' });
+        return badRequest(res, e.message);
+      }
+      return undefined;
+    });
+  }
+  router.get('/my/stations', withFavourites(async (req, res, user) => res.json(myStations.list(user))));
+  router.post('/my/stations', withFavourites(async (req, res, user) => {
+    const body = { ...(req.body || {}) };
+    // Directory stations: take the name and logo from the directory itself when it answers.
+    if (body.source === 'directory') {
+      try {
+        const station = await webradio.station(body.uuid);
+        body.name = station.name;
+        body.image = station.favicon || body.image;
+      } catch (e) {
+        if (e.message === 'invalid station') throw e;
+        /* directory unreachable: keep what the page sent (validated below) */
+      }
+    }
+    const list = myStations.add(user, body);
+    logger.info({ action: 'my_station_add', source: body.source, user });
+    res.json(list);
+  }));
+  router.delete('/my/stations/:fid', withFavourites(async (req, res, user) => {
+    const list = myStations.remove(user, req.params.fid);
+    logger.info({ action: 'my_station_remove', user });
+    res.json(list);
+  }));
+  router.put('/my/stations/order', withFavourites(async (req, res, user) => res.json(myStations.reorder(user, (req.body || {}).ids))));
 
   // ---- Clock: alarms, timers, reminders ----
   function withSchedule(handler) {

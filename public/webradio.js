@@ -66,7 +66,10 @@
     const nowSub = el('div', { class: 'wr-now-sub muted small', text: 'Pick a station below' });
     const nowLogo = el('span', { class: 'radio-icon', text: '📻' });
     const playBtn = el('button', { type: 'button', class: 'icon play', 'aria-label': 'Play', text: '▶' });
-    const nowBar = el('div', { class: 'wr-now' }, [nowLogo, el('div', { class: 'grow' }, [nowName, nowSub]), playBtn]);
+    const nowHeart = el('span', { class: 'wr-now-heart' });
+    const nowBar = el('div', { class: 'wr-now' }, [nowLogo, el('div', { class: 'grow' }, [nowName, nowSub]), nowHeart, playBtn]);
+    const asFavourite = (s) => ({ source: 'directory', uuid: s.uuid, name: s.name, image: s.favicon || '' });
+    let heartFor = '';
 
     function setLogo(station) {
       const node = station && station.favicon
@@ -83,6 +86,12 @@
       playBtn.textContent = audio.paused ? '▶' : '■';
       playBtn.setAttribute('aria-label', audio.paused ? 'Play' : 'Stop');
       setLogo(station);
+      // ♥ for what is playing (rebuilt only when the station changes)
+      const key = station && station.uuid ? station.uuid : '';
+      if (key !== heartFor) {
+        heartFor = key;
+        nowHeart.replaceChildren(key && window.MyStations ? window.MyStations.heart(asFavourite(station)) : '');
+      }
     }
 
     async function play(station) {
@@ -147,7 +156,8 @@
         el('span', { class: 'radio-go', text: '▶' })
       ]);
       button.addEventListener('click', () => play(station));
-      return el('li', {}, [button]);
+      if (!window.MyStations) return el('li', {}, [button]);
+      return el('li', { class: 'radio-row' }, [button, window.MyStations.heart(asFavourite(station))]);
     }
 
     async function load(params, label) {
@@ -198,7 +208,10 @@
 
     return {
       section,
+      nowBar,
       init,
+      // Play a ♥ favourite from the open directory in this page.
+      playFavourite(fav) { return play({ uuid: fav.uuid, name: fav.name, favicon: fav.image || '' }); },
       update(data) {
         amp = { power: data.power, volume: Number(data.volume) || 0, mute: Boolean(data.mute) };
         applyAmp();

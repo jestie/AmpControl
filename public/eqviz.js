@@ -66,7 +66,7 @@
       if (!state.prev || state.prev.length !== n) state.prev = new Float32Array(n);
       for (let i = 0; i < n; i += 1) {
         const v = out[i];
-        state.prev[i] += (v - state.prev[i]) * (v > state.prev[i] ? 0.55 : 0.18);   // fast up, slow down
+        state.prev[i] += (v - state.prev[i]) * (v > state.prev[i] ? 0.8 : 0.33);   // fast up, slow down (tuned for 30 fps)
         out[i] = state.prev[i];
       }
       return out;
@@ -74,7 +74,7 @@
 
     function peaksFor(values) {
       if (!state.peaks || state.peaks.length !== values.length) state.peaks = new Float32Array(values.length);
-      for (let i = 0; i < values.length; i += 1) state.peaks[i] = Math.max(values[i], state.peaks[i] - 0.008);
+      for (let i = 0; i < values.length; i += 1) state.peaks[i] = Math.max(values[i], state.peaks[i] - 0.016);
       return state.peaks;
     }
 
@@ -249,7 +249,7 @@
         // Auto-gain: the waveform is measured after the volume, so scale it to fill the screen.
         let peak = 0.02;
         if (wave && wave.length) for (let k = 0; k < wave.length; k += 4) peak = Math.max(peak, Math.abs(wave[k]));
-        state.scopeGain = (state.scopeGain || 1) + ((0.9 / peak) - (state.scopeGain || 1)) * 0.08;
+        state.scopeGain = (state.scopeGain || 1) + ((0.9 / peak) - (state.scopeGain || 1)) * 0.15;
         const gain = Math.min(40, state.scopeGain);
         for (let i = 0; i < points; i += 1) {
           let y;

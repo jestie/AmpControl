@@ -3,6 +3,10 @@
 All notable changes to SoundControl. Versions follow [semantic versioning](https://semver.org);
 1.0.0 will follow wider real-world testing (HTTPS and the first security scan's fixes landed in 0.7.0).
 
+## [0.12.1] - 2026-11-08
+- Much lighter on your computer: the waves, meters and speakers now draw at 30 frames a second (10 for the waves in standby) instead of 60, the meters stop repainting while the amp is in standby, and an invisible blur on the ghost clock is gone. Measured on a large high-DPI screen: browser CPU in standby 68% → 15% of one core, amp on 84% → 43%; motion looks the same
+- scripts/start.sh and scripts/stop.sh: run SoundControl in the background without systemd (no double starts, clean shutdown, finds a copy the updater restarted)
+
 ## [0.12.0] - 2026-11-07
 - One-click updates: admins press "Update now"; SoundControl backs up settings, accepts only release tags signed with the trusted release key (release/allowed_signers, read from the installed version), fast-forwards, runs npm ci and the tests, restarts, and rolls back automatically on failure
 - Releases are now signed (SSH signatures); docs/RELEASING.md explains how

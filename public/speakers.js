@@ -77,18 +77,21 @@
     const l = mk();
     const r = mk();
     function drive(s, bass, high, loud) {
-      s.avgB += (bass - s.avgB) * 0.04;
-      s.avgH += (high - s.avgH) * 0.06;
+      s.avgB += (bass - s.avgB) * 0.08;   // smoothing tuned for 30 fps
+      s.avgH += (high - s.avgH) * 0.12;
       const kickB = Math.max(0, bass - s.avgB) * 7 + bass * 0.1;
       const kickH = Math.max(0, high - s.avgH) * 6 + high * 0.08;
       const tB = Math.min(1, kickB) * loud;
       const tH = Math.min(1, kickH) * loud;
-      s.bass += (tB - s.bass) * (tB > s.bass ? 0.7 : 0.25);   // punch out, ease back
-      s.high += (tH - s.high) * (tH > s.high ? 0.8 : 0.35);
+      s.bass += (tB - s.bass) * (tB > s.bass ? 0.91 : 0.44);   // punch out, ease back
+      s.high += (tH - s.high) * (tH > s.high ? 0.96 : 0.58);
     }
-    function frame() {
+    let lastFrame = 0;
+    function frame(now) {
       requestAnimationFrame(frame);
       if (document.hidden || !row.classList.contains('speakers-out') || !row.isConnected) return;
+      if (now - lastFrame < 1000 / 30 - 4) return;   // 30 fps: the cones still punch on the beat
+      lastFrame = now;
       const state = getState() || {};
       const on = state.power === 'on' && !state.mute;
       const loud = on ? 0.35 + 0.65 * Math.min(1, (Number(state.volume) || 0) / Math.max(1, cap)) : 0;

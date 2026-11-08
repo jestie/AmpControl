@@ -157,10 +157,10 @@
         const level = sum / ((b - a + 1) * 255);
         // Auto-gain per band: compare against a slowly decaying peak, so quiet
         // rooms and loud rooms both fill the canvas.
-        bandPeak[i] = Math.max(level, bandPeak[i] * 0.995, 0.02);
+        bandPeak[i] = Math.max(level, bandPeak[i] * 0.99, 0.02);
         const norm = Math.min(1, level / bandPeak[i]);
         // Fast attack, slower release: punchy on the beat.
-        bandLevel[i] += (norm - bandLevel[i]) * (norm > bandLevel[i] ? 0.6 : 0.12);
+        bandLevel[i] += (norm - bandLevel[i]) * (norm > bandLevel[i] ? 0.84 : 0.23);
       }
       // Log-spaced spectrum for the bars (40 Hz .. 12 kHz).
       const bars = Math.round(width / 6);
@@ -174,7 +174,7 @@
         const b = Math.max(a, Math.min(bins.length - 1, Math.floor(f1 / hzPerBin)));
         let peak = 0;
         for (let k = a; k <= b; k += 1) peak = Math.max(peak, bins[k]);
-        spectrum[i] += (peak / 255 - spectrum[i]) * 0.5;
+        spectrum[i] += (peak / 255 - spectrum[i]) * 0.75;
       }
       const overall = bandLevel.reduce((x, y) => x + y, 0) / LAYERS;
       energy = 0.15 + overall * 0.85;
@@ -221,10 +221,17 @@
       if (!running) draw(performance.now());
     }
 
+    // The gradient only changes with the palette or the width: build it once, not per frame.
+    let gradCache = null;
+    let gradKey = '';
     function gradient() {
+      const key = `${paletteIndex}:${width}`;
+      if (gradCache && gradKey === key) return gradCache;
       const stops = PALETTES[paletteIndex].stops;
       const g = ctx.createLinearGradient(0, 0, width, 0);
       stops.forEach((color, i) => g.addColorStop(i / (stops.length - 1), color));
+      gradCache = g;
+      gradKey = key;
       return g;
     }
 
@@ -244,7 +251,7 @@
     function draw(now) {
       const t = now / 1000;
       if (live) readLive();
-      else energy += (target - energy) * 0.04;
+      else energy += (target - energy) * 0.08;   // tuned for 30 fps
       ctx.clearRect(0, 0, width, height);
       ctx.globalCompositeOperation = 'lighter';
       const stroke = gradient();
@@ -297,10 +304,19 @@
       ctx.globalCompositeOperation = 'source-over';
     }
 
+    // Frame budget: the waves drift slowly, so 30 fps looks the same as 60 at
+    // half the cost; in standby (flat, dim waves) 10 fps is plenty.
+    let lastDraw = 0;
+    function frameGap() {
+      if (!live && target === 0 && energy < 0.02) return 1000 / 10;
+      return 1000 / 30;
+    }
     function loop(now) {
       if (!running) return;
-      draw(now);
       requestAnimationFrame(loop);
+      if (now - lastDraw < frameGap() - 4) return;
+      lastDraw = now;
+      draw(now);
     }
     function start() {
       if (running || (reduceMotion && !live) || !visible || document.hidden) return;

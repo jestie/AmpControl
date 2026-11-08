@@ -139,6 +139,9 @@ npm test                   # no hardware needed
 npm start
 ```
 
+Or in the background without systemd: `scripts/start.sh` (log in `logs/app.log`)
+and `scripts/stop.sh` to shut it down cleanly.
+
 Open `https://<server-ip>:8443` (or `http://<server-ip>:8095` without a certificate) from any device on the same network. The app
 binds `0.0.0.0` by default; set `HOST` to restrict it.
 

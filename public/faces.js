@@ -274,28 +274,55 @@
     const sctx = spectrum.getContext('2d');
     let needleL = 0;
     let needleR = 0;
-    function frame() {
+    let lastFrame = 0;
+    let needleKey = '';
+    let blank = false;          // the meter canvas is already cleared: don't repaint it
+    let accentCache = null;     // Minimal skin colour: read the CSS variable once a second, not per frame
+    let accentAt = 0;
+    function accent(now) {
+      if (!accentCache || now - accentAt > 1000) {
+        accentCache = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#3d8bfd';
+        accentAt = now;
+      }
+      return accentCache;
+    }
+    function frame(now) {
       requestAnimationFrame(frame);
       if (root.hidden || document.hidden || !root.isConnected) return;
-      const lv = levels ? levels() : { energy: 0, bands: [0, 0, 0, 0], spectrum: null };
+      if (now - lastFrame < 1000 / 30 - 4) return;   // 30 fps is plenty for meters
+      lastFrame = now;
       const on = isOn();
+      // Standby with the needles at rest and the meter cleared: nothing to draw.
+      if (!on && blank && needleL < 0.001 && needleR < 0.001) return;
+      const lv = levels ? levels() : { energy: 0, bands: [0, 0, 0, 0], spectrum: null };
       // VU: left leans on bass, right on treble; damped like a real needle.
       const targetL = on ? Math.min(1, (lv.bands[0] * 0.6 + lv.bands[1] * 0.4)) : 0;
       const targetR = on ? Math.min(1, (lv.bands[2] * 0.5 + lv.bands[3] * 0.5)) : 0;
-      needleL += (targetL - needleL) * 0.18;
-      needleR += (targetR - needleR) * 0.18;
-      left.needle.setAttribute('transform', `rotate(${-50 + needleL * 100} 100 118)`);
-      right.needle.setAttribute('transform', `rotate(${-50 + needleR * 100} 100 118)`);
+      needleL += (targetL - needleL) * 0.3;
+      needleR += (targetR - needleR) * 0.3;
+      if (!on && needleL < 0.001) needleL = 0;
+      if (!on && needleR < 0.001) needleR = 0;
+      const key = `${needleL.toFixed(3)}:${needleR.toFixed(3)}`;
+      if (key !== needleKey) {     // only touch the SVG when a needle actually moved
+        needleKey = key;
+        left.needle.setAttribute('transform', `rotate(${-50 + needleL * 100} 100 118)`);
+        right.needle.setAttribute('transform', `rotate(${-50 + needleR * 100} 100 118)`);
+      }
 
       const w = spectrum.clientWidth;
       const h = spectrum.clientHeight;
       if (!w || !h) return;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      if (spectrum.width !== Math.round(w * dpr)) { spectrum.width = Math.round(w * dpr); spectrum.height = Math.round(h * dpr); }
+      if (spectrum.width !== Math.round(w * dpr)) { spectrum.width = Math.round(w * dpr); spectrum.height = Math.round(h * dpr); blank = false; }
+      if (!on || !renderer) {
+        if (!blank) { sctx.setTransform(1, 0, 0, 1, 0, 0); sctx.clearRect(0, 0, spectrum.width, spectrum.height); blank = true; }
+        return;
+      }
+      blank = false;
       sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       sctx.clearRect(0, 0, w, h);
-      if (!on || !renderer) return;
-      renderer.draw(modes[modeIndex].id, sctx, w, h, lv, lookColors(), performance.now() / 1000);
+      const colors = root.classList.contains('skin-minimal') ? [accent(now)] : lookColors();
+      renderer.draw(modes[modeIndex].id, sctx, w, h, lv, colors, now / 1000);
     }
     requestAnimationFrame(frame);
 
